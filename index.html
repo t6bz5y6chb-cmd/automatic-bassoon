@@ -15,7 +15,7 @@
   --bg:#f4f1ea; --paper:#fcfbf8; --ink:#1c1a17; --ink2:#55524c; --ink3:#8a867d;
   --line:#e2ddd2; --grid:#ebe7de; --accent:#a8382a; --accent-ink:#fff;
   --surface-1:#fcfcfb;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s0:#9a978f;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#6250d6; --s8:#e34948; --s0:#9a978f;
   --good:#0ca30c; --warn:#fab219; --bad:#d03b3b; --na:#9a978f;
   --shadow:0 1px 2px rgba(30,25,15,.06),0 4px 16px rgba(30,25,15,.05);
 }
@@ -24,7 +24,7 @@
     color-scheme:dark;
     --bg:#141413; --paper:#1d1d1b; --ink:#f0efec; --ink2:#c3c2b7; --ink3:#8d8b83;
     --line:#2f2e2b; --grid:#2a2927; --accent:#d4553f; --surface-1:#1a1a19;
-    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s0:#77756e;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767; --s0:#77756e;
     --shadow:none;
   }
 }
@@ -394,15 +394,17 @@ const MODEL_URL = {
 const I = {nose:0,lEye:2,rEye:5,lEar:7,rEar:8,mL:9,mR:10,lSh:11,rSh:12,lEl:13,rEl:14,lWr:15,rWr:16,lHip:23,rHip:24,lKn:25,rKn:26,lAn:27,rAn:28};
 const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[15,19],[16,20],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,29],[29,31],[27,31],[28,30],[30,32],[28,32]];
 const PHASES = {
-  kamae:{name:"足踏み〜弓構え",color:"--s1"},
+  ashibumi:{name:"足踏み",color:"--s1"},
+  dou:{name:"胴造り",color:"--s7"},
+  yugamae:{name:"弓構え",color:"--s3"},
   uchi:{name:"打起し",color:"--s2"},
-  hiki:{name:"引分け",color:"--s3"},
+  hiki:{name:"引分け",color:"--s6"},
   kai:{name:"会",color:"--s4"},
   hanare:{name:"離れ",color:"--s5"},
-  zan:{name:"残心",color:"--s6"},
+  zan:{name:"残心",color:"--s8"},
   after:{name:"弓倒し",color:"--s0"},
 };
-const PH_ORDER = ["kamae","uchi","hiki","kai","hanare","zan","after"];
+const PH_ORDER = ["ashibumi","dou","yugamae","uchi","hiki","kai","hanare","zan","after"];
 const STATUS = {good:{lbl:"良好",ic:"✓",w:100},warn:{lbl:"注意",ic:"!",w:50},bad:{lbl:"要改善",ic:"✕",w:0},na:{lbl:"計測不可",ic:"–"},info:{lbl:"参考",ic:"i"}};
 
 /* ==================== 小道具 ==================== */
@@ -683,62 +685,86 @@ function baseFeatures(F,fps){
 }
 
 /* ==================== 射法八節の区切り ==================== */
+/* 射法八節を順番に判定する。前の節が確認できない限り、次の節には進まない */
 function detectPhases(F,fps){
-  const n=F.length, D=F.map(f=>f.D), H=F.map(f=>f.Hh), V=F.map(f=>f.v);
-  const fail=(why)=>({ok:false,why});
-  if(n<fps*3) return fail("動画が短すぎます（3秒以上必要）");
-  const Dmax=pct(D,0.97);
-  if(!(Dmax>1.45)) return fail("弓を引き分けた姿勢（会）が見つかりませんでした");
-  const firstHigh=D.findIndex(d=>d>=1.3);
-  // 離れ：手首の速度が最大になるところ
-  let r=-1, vmax=0;
-  const g2=Math.max(1,Math.round(0.12*fps));
-  for(let i=Math.max(firstHigh,g2);i<n-1;i++){ const dA=D[i-g2], dB=D[Math.min(n-1,i+g2)]; if(dA<1.3 || dB<dA*0.95) continue; if(V[i]>vmax){vmax=V[i];r=i;} }
-  if(r<0||vmax<1.2) return fail("離れの瞬間を検出できませんでした");
-  let r0=r; while(r0>firstHigh+1 && V[r0-1]>0.35*vmax) r0--;
-  // 会：両拳が引き納めた位置（口割り・押手の高さ）に収まり、引き幅を保って（伸び合って）いる間だけ数える
-  const kaiEnd=Math.max(0,r0-1);
-  const Tm=median(F.map(f=>f.T));
-  const ref=F.slice(Math.max(0,kaiEnd-Math.round(0.3*fps)),kaiEnd+1);
-  const Dk=median(ref.map(f=>f.D));
-  const yL=median(ref.map(f=>f.p[I.lWr].y)), yR=median(ref.map(f=>f.p[I.rWr].y));
-  const xL=median(ref.map(f=>f.p[I.lWr].x)), xR=median(ref.map(f=>f.p[I.rWr].x));
-  const w=Math.max(1,Math.round(0.15*fps));
-  const rate=(arr,i)=>{ const a=Math.max(0,i-w), b=Math.min(n-1,i+w); return (arr[b]-arr[a])/((F[b].t-F[a].t)||1); };
-  const yLs=F.map(f=>f.p[I.lWr].y/Tm), yRs=F.map(f=>f.p[I.rWr].y/Tm);
-  const settled=i=>{
-    const f=F[i];
-    const inPos = D[i]>=0.965*Dk
-      && Math.abs(f.p[I.lWr].y-yL)/Tm<=0.07 && Math.abs(f.p[I.rWr].y-yR)/Tm<=0.07
-      && Math.abs(f.p[I.lWr].x-xL)/Tm<=0.2 && Math.abs(f.p[I.rWr].x-xR)/Tm<=0.2;   // 引き納めた位置に収まっている
-    const still = Math.abs(rate(yLs,i))<0.22 && Math.abs(rate(yRs,i))<0.22 && V[i]<0.6; // 上下に動いていない（引分けが終わっている）
-    const nobi  = rate(D,i) > -0.15;                                                  // 引き幅が縮んでいない（伸び合い）
-    return inPos && still && nobi;
-  };
-  let kaiStart=kaiEnd, miss=0; const tol=Math.max(1,Math.round(0.15*fps));
-  for(let i=kaiEnd;i>=0;i--){
-    if(settled(i)){kaiStart=i;miss=0;} else if(++miss>tol) break;
+  const n=F.length, sec=x=>Math.max(1,Math.round(x*fps));
+  const Tm=median(F.map(f=>f.T)), Sm=median(F.map(f=>f.S));
+  const D=F.map(f=>f.D), H=F.map(f=>f.Hh), V=F.map(f=>f.v);
+  const hipH=F.map(f=>(f.hipMid.y-Math.max(f.p[I.lWr].y,f.p[I.rWr].y))/Tm);   // 低い方の手首が腰よりどれだけ上か
+  const noseUp=F.map(f=>(f.p[I.nose].y-Math.max(f.p[I.lWr].y,f.p[I.rWr].y))/Tm); // 低い方の手首が鼻よりどれだけ上か
+  const stance=F.map(f=>dist(f.p[I.lAn],f.p[I.rAn])/Sm);
+  const ankV=F.map((f,i)=>{ const a=F[Math.max(0,i-1)], b=F[Math.min(n-1,i+1)], dt=(b.t-a.t)||1/fps;
+    return Math.max(dist(a.p[I.lAn],b.p[I.lAn]),dist(a.p[I.rAn],b.p[I.rAn]))/Tm/dt; });
+  const kyV=F.map((f,i)=>{ const a=F[Math.max(0,i-1)], b=F[Math.min(n-1,i+1)]; return Math.abs(b.kWr.y-a.kWr.y)/Tm/((b.t-a.t)||1/fps); });
+  // 頬付け：勝手の手首が口元の横・少し下まで来ている
+  const hoho=F.map(f=>{ const d=dist(f.kWr,f.mouth)/Sm, dy=(f.kWr.y-f.mouth.y)/Tm; return d<=0.5 && dy>=-0.06 && dy<=0.35; });
+  const feetVis=median(F.map(f=>f.visFeet))>0.4;
+  // cond が from 以降で len コマ続く最初の位置（1コマの途切れは許す）
+  const sustained=(cond,from,len,to=n)=>{ for(let i=Math.max(0,from);i<to;i++){ if(!cond(i)) continue; let ok=0,miss=0,j=i; for(;j<to&&ok<len;j++){ if(cond(j)){ok++;miss=0;} else if(++miss>1) break; } if(ok>=len) return i; } return -1; };
+  const ph={}, notes=[];
+  const put=(k,s,e)=>{ if(e>=s && s>=0 && s<n) ph[k]={s,e:Math.min(e,n-1),t0:F[s].t,t1:F[Math.min(e,n-1)].t}; };
+  const res=(stage,why)=>({ok:!!(ph.kai&&ph.hanare),stage,why,ph,notes,u,r0,kaiStart,kaiEnd,hasUchi:!!ph.uchi});
+  let u=-1,r0=-1,kaiStart=-1,kaiEnd=-1;
+
+  // ① 打起しの候補（両拳が鼻より上・弓はまだ引いていない）を先に探し、それより前を構えとして区切る
+  const iTop=sustained(i=>noseUp[i]>0.05 && D[i]<1.45, 0, sec(0.3));
+  const preEnd = iTop>=0 ? iTop : n;
+  // ② 足踏み：足が止まり、足幅が決まるまで
+  let iDou=0;
+  if(feetVis && preEnd>sec(1)){
+    const ref=pct(stance.slice(0,preEnd),0.9);
+    const k=sustained(i=>ankV[i]<0.25 && stance[i]>=0.88*ref, 0, sec(0.6), preEnd);
+    iDou=k<0?0:k;
+    if(iDou>sec(0.3)) put("ashibumi",0,iDou-1);
+  } else if(!feetVis) notes.push("足元が映っていないため、足踏みは区切れません");
+  // ③ 弓構え：両手が腰より上、体の前に構えられたところから
+  let iYu=-1;
+  if(preEnd>iDou){ iYu=sustained(i=>hipH[i]>0.15, iDou, sec(0.5), preEnd); }
+  // ④ 打起し
+  if(iTop<0){
+    if(iYu>=0){ put("dou",iDou,iYu-1); put("yugamae",iYu,n-1); return res("yugamae","打起しが確認できませんでした（両拳が頭の高さまで上がっていません）"); }
+    put("dou",iDou,n-1); return res("dou","弓構え・打起しが確認できませんでした");
   }
-  if(kaiStart>=kaiEnd) kaiStart=Math.max(0,kaiEnd-1);
-  // 打起し（両拳が最も高い所）
-  let u=0, hu=-Infinity; for(let i=0;i<kaiStart;i++){ if(H[i]>hu){hu=H[i];u=i;} }
-  const H0=median(H.slice(0,Math.max(3,Math.round(u*0.15))));
-  const hasUchi = u>0 && hu>H0+0.6 && hu>0.2;
-  let raiseStart=0, uEnd=u;
-  if(hasUchi){
-    raiseStart=u; while(raiseStart>0 && H[raiseStart-1]>H0+0.2*(hu-H0)) raiseStart--;
-    while(uEnd+1<kaiStart && H[uEnd+1]>=hu-0.06) uEnd++;
+  u=iTop; for(let i=iTop;i<Math.min(n,iTop+sec(6));i++){ if(D[i]>=1.45) break; if(H[i]>H[u]) u=i; }
+  const Hb=median(H.slice(Math.max(iYu>=0?iYu:iDou,0),Math.max(iTop-sec(0.8),(iYu>=0?iYu:iDou)+1)));
+  let uStart=iTop; while(uStart>0 && H[uStart-1]>Hb+0.25*(H[u]-Hb)) uStart--;
+  if(iYu>=0 && iYu<uStart){ put("dou",iDou,iYu-1); put("yugamae",iYu,uStart-1); } else { put("dou",iDou,uStart-1); notes.push("弓構えを区切れませんでした"); }
+  let uEnd=u; while(uEnd+1<n && H[uEnd+1]>=H[u]-0.08 && D[uEnd+1]<1.25*Math.max(D[u],0.5)) uEnd++;
+  put("uchi",uStart,uEnd);
+
+  // ⑤ 会：引分けのあと、頬付けができた時点から
+  const findRel=(from)=>{ const g2=Math.max(1,Math.round(0.12*fps));
+    for(let i=Math.max(from,g2);i<n-1;i++){ const v=V[i]; if(v<1.2||v<V[i-1]||v<V[i+1]) continue;
+      const dA=D[i-g2], dB=D[Math.min(n-1,i+g2)]; if(dA<1.3||dB<dA*0.95||H[i-g2]<-0.3) continue; return i; } return -1; };
+  kaiStart=sustained(i=>D[i]>=1.5 && hoho[i] && kyV[i]<0.2, uEnd+1, sec(0.25));
+  let r=-1;
+  if(kaiStart>=0){ r=findRel(kaiStart+sec(0.3)); }
+  else {
+    r=findRel(uEnd+1);
+    if(r<0){ put("hiki",uEnd+1,n-1); return res("hiki","会（頬付け）が確認できませんでした"); }
   }
-  const zanStart=Math.min(n-1,r0+Math.max(2,Math.round(0.35*fps)));
-  let zanEnd=Math.min(n-1,r0+Math.round(2.2*fps));
-  for(let i=zanStart+1;i<=zanEnd;i++){ if(H[i]<H[zanStart]-0.6){ zanEnd=i-1; break; } }
-  const ph={};
-  const put=(k,s,e)=>{ if(e>=s && s>=0) ph[k]={s,e,t0:F[s].t,t1:F[e].t}; };
-  if(hasUchi){ put("kamae",0,raiseStart-1); put("uchi",raiseStart,uEnd); put("hiki",uEnd+1,kaiStart-1); }
-  else { put("hiki",0,kaiStart-1); }
-  put("kai",kaiStart,kaiEnd); put("hanare",r0,zanStart-1); put("zan",zanStart,zanEnd);
+  if(r<0){ put("hiki",uEnd+1,kaiStart-1); put("kai",kaiStart,n-1); kaiEnd=n-1; return res("kai","離れが映っていません（会の途中で動画が終わっています）"); }
+  r0=r; { const vm=V[r]; while(r0>(kaiStart>=0?kaiStart+1:uEnd+2) && V[r0-1]>0.35*vm) r0--; }
+  kaiEnd=r0-1;
+  if(kaiStart<0){
+    // 頬付けが取れない撮り方のときは、両拳が収まって止まった時点を会の始まりにする
+    const ref=F.slice(Math.max(0,kaiEnd-sec(0.3)),kaiEnd+1), Dk=median(ref.map(f=>f.D)), yK=median(ref.map(f=>f.kWr.y)), yO=median(ref.map(f=>f.oWr.y));
+    kaiStart=kaiEnd; let miss=0;
+    for(let i=kaiEnd;i>uEnd;i--){ const f=F[i]; const ok=D[i]>=0.965*Dk && Math.abs(f.kWr.y-yK)/Tm<=0.07 && Math.abs(f.oWr.y-yO)/Tm<=0.07 && kyV[i]<0.3;
+      if(ok){kaiStart=i;miss=0;} else if(++miss>sec(0.15)) break; }
+    notes.push("頬付けを確認できなかったため、両拳が収まって止まった時点から会を数えています");
+  }
+  put("hiki",uEnd+1,kaiStart-1); put("kai",kaiStart,kaiEnd);
+  // ⑥ 離れ：弦が放たれ、矢が画面から抜けるまで（矢は約0.1秒で抜けるため0.2秒）
+  const zanStart=Math.min(n-1,r0+sec(0.2));
+  put("hanare",r0,zanStart-1);
+  // ⑦ 残心：腕が下がり始めるまで → ⑧ 弓倒し
+  const Hz=median(H.slice(zanStart,Math.min(n,zanStart+sec(0.5))));
+  const down=sustained(i=>H[i]<Hz-0.5, zanStart+sec(0.5), sec(0.3));
+  const zanEnd = down<0 ? n-1 : down-1;
+  put("zan",zanStart,zanEnd);
   if(zanEnd<n-1) put("after",zanEnd+1,n-1);
-  return {ok:true,ph,u:hasUchi?u:-1,r0,kaiStart,kaiEnd,hasUchi};
+  return res(ph.after?"after":"zan","");
 }
 
 /* ==================== 押手側を決めて指標を出す ==================== */
@@ -765,9 +791,11 @@ function sideFeatures(F,hand){
   return {dir,O,K};
 }
 
-function autoHand(F,P){
-  const kai=P.ok?P.ph.kai:null;
-  const rng = kai ? F.slice(kai.s,kai.e+1) : F;
+function autoHand(F){
+  // 両手が肩の高さ付近にあり、最も大きく開いている場面（会・残心）で、伸びている方の腕を押手とみなす
+  const cand=F.filter(f=>f.Hh>-0.4); const top=pct(cand.map(f=>f.D),0.85);
+  const rng0=cand.filter(f=>f.D>=top);
+  const rng=rng0.length>=3?rng0:F;
   const aL=median(rng.map(f=>ang3(f.p[I.lSh],f.p[I.lEl],f.p[I.lWr])));
   const aR=median(rng.map(f=>ang3(f.p[I.rSh],f.p[I.rEl],f.p[I.rWr])));
   return aL>=aR?"L":"R";
@@ -785,8 +813,8 @@ function computeMetrics(F,P,ctx){
   const add=(o)=>M.push(o);
 
   // ---- 足踏み・胴造り：会より前の静止した構え（無ければ先頭）
-  let base=seg("kamae");
-  if(base.length<3) base=F.slice(0,Math.max(3,Math.round(F.length*0.12)));
+  let base=[...seg("dou"),...seg("yugamae")];
+  if(base.length<3) base=P.ph&&P.ph.uchi?F.slice(0,Math.max(3,P.ph.uchi.s)):F.slice(0,Math.max(3,Math.round(F.length*0.12)));
   const tBase=at(base);
   const feetVis=md(base,f=>f.visFeet);
   // 足幅
@@ -815,7 +843,6 @@ function computeMetrics(F,P,ctx){
   add({grp:"dou",nm:"三重十文字（肩線と腰線の平行）",val:`ずれ ${f1(tj)}°`,ideal:"平行（3°以内）",t:tBase,st:grade(tj,absIn(3),absIn(6)),
     adv:Math.abs(tj)<=3?"肩線と腰線がそろい、三重十文字が整っています。":"肩線と腰線が平行になっていません。上体のねじれや片側への寄りかかりがないか確認しましょう。"});
 
-  if(!P.ok) return M;
 
   // ---- 打起し
   if(P.hasUchi){
@@ -847,11 +874,12 @@ function computeMetrics(F,P,ctx){
     add({grp:"hiki",nm:"引分けにかかった時間",val:`${dur.toFixed(1)}秒`,ideal:"参考値",t:at(hk),st:"info",adv:"急いで引き下ろすと矢の水平や肩の位置が崩れやすくなります。大三でいったん落ち着いてから、ゆっくり均等に引き分けましょう。"});
   }
 
+  if(!P.ok) return M;
   // ---- 会
   const kai=F.slice(P.kaiStart,P.kaiEnd+1);
   const kaiLen=P.ph.kai.t1-P.ph.kai.t0+1/ctx.fps;
   const tKai=kai.length?kai[Math.max(0,kai.length-1-Math.round(ctx.fps*0.25))].t:null;
-  add({grp:"kai",nm:"会の長さ",val:`${kaiLen.toFixed(1)}秒`,ideal:"口割りに収まり伸び合っている時間が3秒以上",t:F[P.kaiStart].t,st:grade(kaiLen,v=>v>=3,v=>v>=1.5),
+  add({grp:"kai",nm:"会の長さ",val:`${kaiLen.toFixed(1)}秒`,ideal:"頬付けしてから離れまで3秒以上",t:F[P.kaiStart].t,st:grade(kaiLen,v=>v>=3,v=>v>=1.5),
     adv:kaiLen>=3?"会で十分に保てています。":kaiLen>=1.5?"会がやや短めです。口割りに納まってから、もう一息ぶん伸び合う時間を作りましょう。":"会がほとんど無く、引き納めてすぐに離れています。早気の傾向がないか確認してください。会で呼吸を整えてから離す練習（巻藁で数を数える等）が有効です。"});
   const eo=md(kai,f=>f.elbO), visO=md(kai,f=>f.visO);
   add({grp:"kai",nm:"押手（弓手）の肘の伸び",val:`${eo.toFixed(0)}°`,ideal:"ほぼまっすぐ（165°以上）",t:tKai,st:visO>0.3?grade(eo,v=>v>=165,v=>v>=155):"na",
@@ -926,10 +954,10 @@ function computeMetrics(F,P,ctx){
 async function finishAnalysis(raw){
   const F=preprocess(raw,S.W,S.H,S.fps);
   const {Sm,Tm}=baseFeatures(F,S.fps);
-  const P=detectPhases(F,S.fps);
   const sel=$("#optHand").value;
-  const hand= sel==="auto" ? autoHand(F,P) : sel;
+  const hand= sel==="auto" ? autoHand(F) : sel;
   const {dir}=sideFeatures(F,hand);
+  const P=detectPhases(F,S.fps);
   const style=$("#optStyle").value;
   const M=computeMetrics(F,P,{Sm,Tm,dir,style,fps:S.fps});
   S.frames=F; S.res={P,M,hand,dir,Sm,Tm,style};
@@ -938,8 +966,8 @@ async function finishAnalysis(raw){
 }
 
 const GROUPS = [
-  {k:"ashibumi",name:"足踏み",ph:"kamae",desc:"両足を踏み開き、射の土台を作る"},
-  {k:"dou",name:"胴造り",ph:"kamae",desc:"足踏みの上に上体を正しく据える"},
+  {k:"ashibumi",name:"足踏み",ph:"ashibumi",desc:"両足を踏み開き、射の土台を作る"},
+  {k:"dou",name:"胴造り",ph:"dou",desc:"足踏みの上に上体を正しく据える"},
   {k:"uchi",name:"打起し",ph:"uchi",desc:"弓矢を水平に保ったまま両拳を上げる"},
   {k:"hiki",name:"引分け",ph:"hiki",desc:"左右均等に、水平に引き下ろす"},
   {k:"kai",name:"会",ph:"kai",desc:"引き納めて伸び合い、離れの機を熟させる"},
@@ -959,7 +987,8 @@ async function renderResults(){
   $("#counts").innerHTML=["bad","warn","good"].map(k=>`${chip(k)}<span class="small" style="margin:0 6px 0 -2px">${cnt[k]}項目</span>`).join("");
   const top=[...M.filter(m=>m.st==="bad"),...M.filter(m=>m.st==="warn")].slice(0,5);
   let html="";
-  if(!P.ok) html+=`<li>${chip("na")}<span>射の流れを区切れませんでした（${esc(P.why)}）。足踏み・胴造りのみ判定しています。</span></li>`;
+  if(!P.ok) html+=`<li>${chip("na")}<span>${esc(P.why)}。確認できた「${PHASES[P.stage].name}」までを判定しています。</span></li>`;
+  (P.notes||[]).forEach(t=>{ html+=`<li>${chip("info")}<span>${esc(t)}</span></li>`; });
   html+= top.length? top.map(m=>`<li>${chip(m.st)}<span><b>${GROUPS.find(g=>g.k===m.grp).name}・${esc(m.nm)}</b>　${esc(m.adv.split("。")[0])}。</span></li>`).join("")
        : `<li>${chip("good")}<span>大きな歪みは見つかりませんでした。</span></li>`;
   $("#issues").innerHTML=html;
@@ -1016,7 +1045,7 @@ function frameAt(t){
   while(hi-lo>1){ const m=(lo+hi)>>1; if(F[m].t<t) lo=m; else hi=m; }
   return Math.abs(F[lo].t-t)<=Math.abs(F[hi].t-t)?lo:hi;
 }
-function phaseOf(i){ const P=S.res.P; if(!P.ok) return null; for(const k of PH_ORDER){ const p=P.ph[k]; if(p&&i>=p.s&&i<=p.e) return k; } return null; }
+function phaseOf(i){ const P=S.res.P; if(!P.ph) return null; for(const k of PH_ORDER){ const p=P.ph[k]; if(p&&i>=p.s&&i<=p.e) return k; } return null; }
 
 function statusColor(st){ return cssv(st==="good"?"--good":st==="warn"?"--warn":"--bad"); }
 
@@ -1138,7 +1167,7 @@ $("#tgVideo").onchange=e=>{S.show.video=e.target.checked; $("#mv").style.visibil
 function buildTimeline(){
   const tl=$("#tl"); tl.querySelectorAll(".seg").forEach(e=>e.remove());
   const F=S.frames, t0=F[0].t, t1=F[F.length-1].t, P=S.res.P;
-  if(P.ok) for(const k of PH_ORDER){ const p=P.ph[k]; if(!p) continue;
+  if(P.ph) for(const k of PH_ORDER){ const p=P.ph[k]; if(!p) continue;
     const s=document.createElement("div"); s.className="seg";
     const a=(p.t0-t0)/(t1-t0)*100, b=(Math.min(t1,p.t1+1/S.fps)-t0)/(t1-t0)*100;
     s.style.left=a+"%"; s.style.width=Math.max(0.4,b-a)+"%";
@@ -1156,13 +1185,15 @@ function buildTimeline(){
 async function buildSnaps(){
   const P=S.res.P, F=S.frames, box=$("#snaps"); box.innerHTML="";
   const list=[];
-  if(P.ok){
-    if(P.ph.kamae) list.push(["足踏み・胴造り",F[(P.ph.kamae.s+P.ph.kamae.e)>>1].t]);
-    if(P.hasUchi) list.push(["打起し",F[P.u].t]);
-    list.push(["会",F[Math.max(P.kaiStart,P.kaiEnd-Math.round(S.fps*0.25))].t]);
-    list.push(["離れ",F[Math.min(F.length-1,P.r0+Math.round(S.fps*0.15))].t]);
-    if(P.ph.zan) list.push(["残心",F[(P.ph.zan.s+P.ph.zan.e)>>1].t]);
-  } else list.push(["構え",F[0].t]);
+  const ph=P.ph||{}, mid=k=>F[(ph[k].s+ph[k].e)>>1].t;
+  if(ph.dou) list.push(["胴造り",mid("dou")]);
+  if(ph.yugamae) list.push(["弓構え",mid("yugamae")]);
+  if(ph.uchi) list.push(["打起し",F[P.u].t]);
+  if(ph.hiki) list.push(["引分け",mid("hiki")]);
+  if(ph.kai) list.push(["会",F[Math.max(ph.kai.s,ph.kai.e-Math.round(S.fps*0.25))].t]);
+  if(ph.hanare) list.push(["離れ",F[Math.min(F.length-1,ph.hanare.s+Math.round(S.fps*0.1))].t]);
+  if(ph.zan) list.push(["残心",mid("zan")]);
+  if(!list.length) list.push(["構え",F[0].t]);
   const v=$("#mv"), ar=S.W/S.H, cw=Math.round(Math.min(480,S.W)), ch=Math.round(cw/ar);
   for(const [name,t] of list){
     const d=document.createElement("div"); d.className="snap";
@@ -1202,7 +1233,7 @@ class LineChart{
     const pad=(hi-lo)*0.08||1; lo-=pad; hi+=pad;
     const X=t=>g.L+(t-t0)/(t1-t0||1)*(g.w-g.L-g.R), Y=v=>g.T+(1-(v-lo)/(hi-lo))*(g.h-g.T-g.B);
     // 位相の帯
-    if(this.P&&this.P.ok) for(const k of PH_ORDER){ const p=this.P.ph[k]; if(!p) continue;
+    if(this.P&&this.P.ph) for(const k of PH_ORDER){ const p=this.P.ph[k]; if(!p) continue;
       ctx.fillStyle=cssv(PHASES[k].color); ctx.globalAlpha=0.13; ctx.fillRect(X(p.t0),g.T,Math.max(1,X(p.t1)-X(p.t0)),g.h-g.T-g.B); ctx.globalAlpha=1; }
     if(this.o.band){ ctx.fillStyle=cssv("--good"); ctx.globalAlpha=0.09; ctx.fillRect(g.L,Y(this.o.band[1]),g.w-g.L-g.R,Y(this.o.band[0])-Y(this.o.band[1])); ctx.globalAlpha=1; }
     // 軸・目盛
@@ -1234,7 +1265,7 @@ $("#copy").onclick=async()=>{
   const {M,P}=S.res; const lines=[`射形診断　スコア ${$("#scoreNum").textContent}`,""];
   for(const g of GROUPS){ const ms=M.filter(m=>m.grp===g.k); if(!ms.length) continue; lines.push(`■${g.name}`);
     ms.forEach(m=>lines.push(`・${m.nm}：${m.val}［${STATUS[m.st].lbl}］${m.st==="good"||m.st==="info"?"":" "+m.adv}`)); lines.push(""); }
-  if(!P.ok) lines.push(`※射の流れを区切れませんでした：${P.why}`);
+  if(!P.ok) lines.push(`※${P.why}（${PHASES[P.stage].name}までを判定）`);
   const txt=lines.join("\n");
   try{ await navigator.clipboard.writeText(txt); $("#copy").textContent="コピーしました"; setTimeout(()=>$("#copy").textContent="結果をテキストでコピー",1800); }
   catch(_){ const ta=document.createElement("textarea"); ta.value=txt; ta.style.cssText="width:100%;height:200px;margin-top:10px"; $("#copy").parentElement.after(ta); ta.select(); }
@@ -1381,7 +1412,7 @@ function lastRelease(F,fps){
   for(let i=g2;i<n-1;i++){
     const v=F[i].v; if(v<1.2||v<F[i-1].v||v<F[i+1].v) continue;
     const dA=F[i-g2].D, dB=F[Math.min(n-1,i+g2)].D;
-    if(dA<1.3||dB<dA*0.95) continue;
+    if(dA<1.3||dB<dA*0.95||F[i-g2].Hh<-0.3) continue;
     let hold=true; for(let j=Math.max(0,i-hw);j<=i-g2;j++) if(F[j].D<1.3){ hold=false; break; }
     if(!hold) continue;
     if(best<0||F[i].t-F[best].t>1.5) best=i; else if(v>F[best].v) best=i;
@@ -1419,7 +1450,7 @@ async function camDiagnose(){
     const Fp=preprocess(raw,W,H,aF); baseFeatures(Fp,aF);
     const r=lastRelease(Fp,aF);
     if(r<0) throw new Error(`直前${win}秒の中に離れが見つかりませんでした。射のあとに押すか、さかのぼる範囲を広げてください。`);
-    const tr=Fp[r].t, a=tr-22, b=tr+3.5;
+    const tr=Fp[r].t, a=tr-25, b=tr+5;
     const crop=raw.filter(x=>x.t>=a&&x.t<=b);
     S.disp=frames.filter(f=>f.t-t0>=a&&f.t-t0<=b).map(f=>({t:f.t-t0,blob:f.blob}));
     S.source="frames"; S.W=W; S.H=H; S.fps=aF;
@@ -1445,32 +1476,34 @@ function dispBitmap(t){
 function makeDemo(){
   const W=1280,H=720,fps=30,k=165,cx=560,cy=375;
   const P={
+    dou:{LE:[0.42,-0.3],LW:[0.45,0.35],RE:[-0.42,-0.35],RW:[-0.32,0.02],look:0},
     kamae:{LE:[0.6,-0.55],LW:[0.27,-0.38],RE:[-0.55,-0.55],RW:[-0.2,-0.38],look:0},
     uchi:{LE:[0.72,-1.55],LW:[0.3,-1.98],RE:[-0.64,-1.55],RW:[-0.22,-2.0],look:1},
     daisan:{LE:[1.0,-1.45],LW:[1.22,-1.8],RE:[-0.55,-1.62],RW:[-0.05,-1.95],look:1},
     kai:{LE:[0.9,-1.15],LW:[1.45,-1.28],RE:[-0.64,-1.13],RW:[-0.06,-1.31],look:1},
     zan:{LE:[0.93,-1.1],LW:[1.5,-1.2],RE:[-0.86,-1.03],RW:[-1.4,-0.99],look:1},
   };
-  const keys=[[0,"kamae"],[1.8,"kamae"],[3.6,"uchi"],[4.3,"uchi"],[5.5,"daisan"],[6.1,"daisan"],[8.3,"kai"],[9.5,"kai"],[9.58,"zan"],[11.6,"zan"],[13.2,"kamae"],[14,"kamae"]];
+  const keys=[[0,"dou"],[2.6,"dou"],[3.6,"kamae"],[4.8,"kamae"],[6.6,"uchi"],[7.3,"uchi"],[8.5,"daisan"],[9.1,"daisan"],[11.3,"kai"],[13.8,"kai"],[13.88,"zan"],[15.9,"zan"],[17.5,"kamae"],[18.5,"kamae"]];
   const ease=x=>x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;
   const smooth=(a,b,t)=>{ const x=clamp((t-a)/(b-a),0,1); return x*x*(3-2*x); };
   let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return (seed/2147483647-0.5); };
   const frames=[];
-  for(let fi=0; fi<=14*fps; fi++){
+  for(let fi=0; fi<=18.5*fps; fi++){
     const t=fi/fps;
     let j=0; while(j<keys.length-2&&keys[j+1][0]<=t) j++;
     const [ta,pa]=keys[j], [tb,pb]=keys[j+1];
     const w=pb==="zan"&&pa==="kai" ? clamp((t-ta)/(tb-ta),0,1) : ease(clamp((t-ta)/(tb-ta),0,1));
     const A=P[pa],B=P[pb], L=(n)=>[A[n][0]+(B[n][0]-A[n][0])*w, A[n][1]+(B[n][1]-A[n][1])*w];
     const look=A.look+(B.look-A.look)*w;
-    const fault=smooth(7.3,8.3,t)*(1-smooth(11.6,13,t));
+    const fault=smooth(10.3,11.3,t)*(1-smooth(15.9,17.3,t));
     const lean=deg2rad(3.6*fault);
-    const shRise=0.075*fault*(1-smooth(9.5,9.7,t)*0.6);
+    const shRise=0.075*fault*(1-smooth(13.8,14.0,t)*0.6);
     const pts={};
     const set=(i,x,y)=>pts[i]=[x,y];
     // 下半身
-    set(23,0.18,0); set(24,-0.18,0); set(25,0.5,0.75); set(26,-0.5,0.75); set(27,0.84,1.5); set(28,-0.84,1.5);
-    set(29,0.8,1.56); set(30,-0.8,1.56); set(31,0.97,1.6); set(32,-0.97,1.6);
+    const ax=0.25+(0.84-0.25)*smooth(0.2,1.3,t); // 足踏み：両足を踏み開く
+    set(23,0.18,0); set(24,-0.18,0); set(25,ax*0.6,0.75); set(26,-ax*0.6,0.75); set(27,ax,1.5); set(28,-ax,1.5);
+    set(29,ax-0.04,1.56); set(30,-ax+0.04,1.56); set(31,ax+0.13,1.6); set(32,-ax-0.13,1.6);
     // 上半身
     set(11,0.34,-1-shRise); set(12,-0.34,-1);
     const le=L("LE"), lw=L("LW"), re=L("RE"), rw=L("RW");

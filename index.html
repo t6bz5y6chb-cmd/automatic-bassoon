@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="射形診断">
+<title>射形診断 — 弓道の射形を動画から分析</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f4f1ea; --paper:#fcfbf8; --ink:#1c1a17; --ink2:#55524c; --ink3:#8a867d;
+  --line:#e2ddd2; --grid:#ebe7de; --accent:#a8382a; --accent-ink:#fff;
+  --surface-1:#fcfcfb;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s0:#9a978f;
+  --good:#0ca30c; --warn:#fab219; --bad:#d03b3b; --na:#9a978f;
+  --shadow:0 1px 2px rgba(30,25,15,.06),0 4px 16px rgba(30,25,15,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    color-scheme:dark;
+    --bg:#141413; --paper:#1d1d1b; --ink:#f0efec; --ink2:#c3c2b7; --ink3:#8d8b83;
+    --line:#2f2e2b; --grid:#2a2927; --accent:#d4553f; --surface-1:#1a1a19;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s0:#77756e;
+    --shadow:none;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Noto Sans JP","Hiragino Sans","Yu Gothic UI",system-ui,sans-serif;font-size:15px;line-height:1.7;-webkit-text-size-adjust:100%}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 80px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:8px 0 18px;border-bottom:1px solid var(--line);margin-bottom:20px}
+.brand{display:flex;align-items:center;gap:12px}
+.mato{width:40px;height:40px;flex:none}
+h1{font-family:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;font-weight:700;font-size:26px;letter-spacing:.12em;margin:0;line-height:1.2}
+.sub{color:var(--ink2);font-size:12.5px;letter-spacing:.04em}
+h2{font-family:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;font-size:19px;letter-spacing:.08em;margin:0 0 12px;font-weight:700}
+h3{font-size:15px;margin:0;font-weight:700}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:var(--shadow)}
+.muted{color:var(--ink2)}
+.small{font-size:12.5px}
+.btn{appearance:none;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:999px;padding:9px 16px;font:inherit;font-size:14px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:40px}
+.btn:hover{border-color:var(--ink3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent}
+.btn.sm{padding:5px 12px;min-height:32px;font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.drop{border:1.5px dashed var(--ink3);border-radius:12px;padding:22px 14px;text-align:center;cursor:pointer;transition:background .15s}
+.drop:hover,.drop.over{background:rgba(168,56,42,.05);border-color:var(--accent)}
+.drop strong{display:block;font-size:16px;margin-bottom:2px}
+.settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink2)}
+select,input[type=number]{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:38px}
+.preview{margin-top:14px;display:none}
+.preview video{width:100%;max-height:50vh;background:#000;border-radius:10px;display:block}
+.range-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;font-size:13px}
+.range-row .val{font-variant-numeric:tabular-nums;font-weight:700;min-width:56px}
+details.tips{margin-top:14px;font-size:13px;color:var(--ink2)}
+details.tips summary{cursor:pointer;color:var(--ink);font-weight:500}
+details.tips ul{margin:8px 0 0;padding-left:20px}
+.progress{display:none}
+.bar{height:8px;background:var(--grid);border-radius:99px;overflow:hidden;margin:10px 0 6px}
+.bar>i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+#results{display:none}
+.summary{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}
+.score{width:116px;height:116px;position:relative}
+.score svg{width:100%;height:100%;transform:rotate(-90deg)}
+.score .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"Shippori Mincho",serif}
+.score .num b{font-size:34px;line-height:1}
+.score .num span{font-size:11px;color:var(--ink2);margin-top:2px}
+.issues{margin:0;padding:0;list-style:none}
+.issues li{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.issues li:last-child{border-bottom:0}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;border-radius:99px;padding:1px 9px 1px 6px;white-space:nowrap;line-height:1.7;flex:none}
+.chip .ic{width:15px;height:15px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:10px;line-height:1}
+.chip.good{background:color-mix(in srgb,var(--good) 14%,transparent)}.chip.good .ic{background:var(--good)}
+.chip.warn{background:color-mix(in srgb,var(--warn) 22%,transparent)}.chip.warn .ic{background:var(--warn);color:#1c1a17}
+.chip.bad{background:color-mix(in srgb,var(--bad) 14%,transparent)}.chip.bad .ic{background:var(--bad)}
+.chip.na,.chip.info{background:var(--grid)}.chip.na .ic,.chip.info .ic{background:var(--na)}
+.counts{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 10px}
+.stage{position:relative;margin:0 auto;background:#000;border-radius:10px;overflow:hidden;max-width:100%}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.stage .phase-tag{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.62);color:#fff;font-size:13px;font-weight:700;padding:3px 10px;border-radius:99px;letter-spacing:.06em;pointer-events:none}
+.ctrl{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.ctrl .time{font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink2);min-width:92px}
+.tl{position:relative;height:40px;margin-top:8px;touch-action:none;cursor:pointer;user-select:none}
+.tl .seg{position:absolute;top:0;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink);overflow:hidden;white-space:nowrap}
+.tl .seg span{padding:0 3px}
+.tl .base{position:absolute;top:0;left:0;right:0;height:22px;background:var(--grid);border-radius:4px}
+.tl .head{position:absolute;top:-4px;width:2px;height:30px;background:var(--ink);pointer-events:none}
+.tl .head::after{content:"";position:absolute;left:-5px;top:26px;width:12px;height:12px;border-radius:50%;background:var(--ink);border:2px solid var(--paper)}
+.toggles{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-top:6px;color:var(--ink2)}
+.toggles label{display:flex;gap:5px;align-items:center;cursor:pointer}
+.live{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px}
+.live div{background:var(--bg);border-radius:10px;padding:8px 10px}
+.live small{display:block;color:var(--ink2);font-size:11.5px}
+.live b{font-variant-numeric:tabular-nums;font-size:17px}
+.charts{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:760px){.charts{grid-template-columns:1fr 1fr}}
+.chart{position:relative}
+.chart .ttl{font-size:13px;font-weight:700;margin-bottom:2px}
+.chart .cap{font-size:11.5px;color:var(--ink2);margin-bottom:4px}
+.chart canvas{width:100%;height:170px;display:block;cursor:crosshair;touch-action:pan-y}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--paper);font-size:12px;padding:5px 8px;border-radius:6px;white-space:nowrap;display:none;z-index:3;line-height:1.5}
+.snaps{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.snap{cursor:pointer;border-radius:10px;overflow:hidden;background:var(--bg);border:1px solid var(--line)}
+.snap canvas{width:100%;display:block;background:#000}
+.snap div{font-size:12px;padding:4px 8px;font-weight:700}
+.phase-card{border-left:4px solid var(--s0)}
+.phase-card .ph-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.phase-card .ph-head h2{margin:0}
+.metric{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;border-top:1px solid var(--line)}
+.metric:first-of-type{border-top:0}
+.metric .nm{font-weight:700;font-size:14px}
+.metric .vl{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;text-align:right}
+.metric .id{font-size:12px;color:var(--ink2)}
+.metric .adv{grid-column:1/-1;font-size:13.5px;color:var(--ink);margin-top:2px}
+.metric .meta{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.linkish{background:none;border:0;padding:0;color:var(--accent);font:inherit;font-size:12.5px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.note{font-size:12.5px;color:var(--ink2)}
+.note li{margin-bottom:4px}
+.err{background:color-mix(in srgb,var(--bad) 10%,transparent);border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:10px;padding:10px 12px;font-size:13.5px;margin-top:10px;display:none}
+.legend-phases{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--ink2);margin-top:2px}
+.legend-phases i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+@media(max-width:520px){
+  h1{font-size:22px}
+  .summary{grid-template-columns:1fr;justify-items:center}
+  .summary>div:last-child{width:100%}
+}
+.tabs{display:flex;gap:6px;background:var(--grid);padding:4px;border-radius:999px;margin-bottom:16px;width:max-content;max-width:100%}
+.tabs button{appearance:none;border:0;background:transparent;font:inherit;font-size:14px;font-weight:700;color:var(--ink2);padding:8px 16px;border-radius:999px;cursor:pointer}
+.tabs button.on{background:var(--paper);color:var(--ink);box-shadow:var(--shadow)}
+.camstage{position:relative;background:#000;border-radius:12px;overflow:hidden;width:100%;height:min(72vh,760px);display:flex;align-items:center;justify-content:center}
+.camstage:fullscreen{height:100vh;border-radius:0}
+.camstage:-webkit-full-screen{height:100vh;width:100vw;border-radius:0}
+.camstage canvas{display:block;max-width:100%;max-height:100%}
+.cam-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:20px;font-size:15px;gap:8px;pointer-events:none}
+.cam-msg b{font-family:"Shippori Mincho",serif;font-size:clamp(28px,7vw,64px);line-height:1.1}
+.cam-badge{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.6);color:#fff;font-weight:700;font-size:clamp(13px,2.2vw,20px);padding:4px 12px;border-radius:99px;pointer-events:none}
+.cam-badge.paused{background:var(--accent)}
+.cam-over{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.cam-over .btn{background:rgba(0,0,0,.6);color:#fff;border-color:rgba(255,255,255,.35);font-size:clamp(14px,2.2vw,20px);min-height:clamp(40px,6vw,60px);padding:8px clamp(14px,2.4vw,24px)}
+.cam-over .btn.primary{background:var(--accent);border-color:var(--accent)}
+.cam-over .btn:disabled{opacity:.4}
+.scrub{position:absolute;left:12px;right:12px;bottom:clamp(60px,9vw,84px);display:none}
+.scrub input{width:100%}
+.cam-prog{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;background:rgba(0,0,0,.72);color:#fff;font-size:14px;display:none}
+.cam-prog .bar{background:rgba(255,255,255,.2);margin:6px 0 0}
+.floatback{position:fixed;right:14px;bottom:14px;z-index:20;display:none;box-shadow:0 4px 16px rgba(0,0,0,.25)}
+</style>
+</head>
+<body>
+<button class="btn primary floatback" id="floatBack">← 遅延映像に戻る</button>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg class="mato" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="19" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.5"/>
+        <circle cx="20" cy="20" r="15" fill="var(--ink)"/><circle cx="20" cy="20" r="12" fill="var(--paper)"/>
+        <circle cx="20" cy="20" r="9.5" fill="var(--ink)"/><circle cx="20" cy="20" r="7" fill="var(--paper)"/>
+        <circle cx="20" cy="20" r="4.5" fill="var(--ink)"/>
+      </svg>
+      <div>
+        <h1>射形診断</h1>
+        <div class="sub">射法八節の歪みを動画から読み取る</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button id="tabCam" class="on" role="tab">遅延カメラ</button>
+    <button id="tabFile" role="tab">動画ファイル</button>
+  </div>
+
+  <!-- 遅延カメラ -->
+  <section class="card" id="camCard">
+    <div class="camstage" id="camStage">
+      <canvas id="dc"></canvas>
+      <div class="cam-badge" id="camBadge" style="display:none"></div>
+      <div class="cam-msg" id="camMsg"><b>遅延カメラ</b><span>射手の正面に三脚で置き、「カメラを開始」を押してください</span></div>
+      <div class="scrub" id="scrub"><input type="range" id="scrubIn" min="0" max="1" step="0.01" value="1" aria-label="巻き戻し"></div>
+      <div class="cam-over">
+        <button class="btn" id="camFull" style="display:none">全画面</button>
+        <button class="btn" id="camPause" disabled>一時停止</button>
+        <button class="btn primary" id="camDiag" disabled>直前の射を診断</button>
+      </div>
+      <div class="cam-prog" id="camProg"><span id="camProgText">解析中…</span><div class="bar"><i id="camBar"></i></div></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn primary" id="camStart">カメラを開始</button>
+      <button class="btn ghost" id="camStop" style="display:none">カメラを止める</button>
+      <span class="small muted" id="camStat"></span>
+    </div>
+    <div class="settings">
+      <label class="f">遅延時間
+        <select id="camDelay"><option value="5">5秒</option><option value="10">10秒</option><option value="15">15秒</option><option value="20" selected>20秒</option><option value="30">30秒</option><option value="45">45秒</option><option value="60">60秒</option></select>
+      </label>
+      <label class="f">カメラ
+        <select id="camFacing"><option value="environment">背面カメラ</option><option value="user">前面カメラ</option></select>
+      </label>
+      <label class="f">表示
+        <select id="camMirror"><option value="0">そのまま</option><option value="1">左右反転（鏡のように）</option></select>
+      </label>
+      <label class="f">診断でさかのぼる範囲
+        <select id="camWin"><option value="40">直前40秒</option><option value="60" selected>直前60秒</option><option value="90">直前90秒</option></select>
+      </label>
+      <label class="f">押手（弓手）
+        <select id="camHand"><option value="auto">自動判定</option><option value="L">左手（右射）</option><option value="R">右手（左射）</option></select>
+      </label>
+      <label class="f">骨格推定モデル
+        <select id="camModel"><option value="full" selected>標準（高精度）</option><option value="lite">軽量（iPhone・古いiPad向け）</option></select>
+      </label>
+    </div>
+    <div class="err" id="camErr"></div>
+    <details class="tips">
+      <summary>使い方と置き方</summary>
+      <ul>
+        <li>射手の<strong>正面（胸側）</strong>に三脚で固定し、頭から足先まで入るように置く。カメラは1倍のまま</li>
+        <li>画面には設定した秒数だけ遅れた映像が流れ続ける。射のあと戻ってきた射手が、自分の射をそのまま見られる</li>
+        <li>見たい射のあとに「直前の射を診断」を押すと、さかのぼった範囲から一番新しい離れを見つけて診断する（iPadで10〜30秒ほど）</li>
+        <li>「一時停止」で映像を止め、下のつまみで巻き戻して見返せる。録画は裏で続いている</li>
+        <li>映像は端末のメモリにだけ置かれ、保存も送信もされない。画面は自動で消えないようにしている</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- 入力 -->
+  <section class="card" id="inputCard" style="display:none">
+    <h2>動画を読み込む</h2>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept="video/*,video/quicktime,video/mp4,.mov,.MOV,.mp4,.m4v" hidden>
+      <strong>射の動画を選択</strong>
+      <span class="muted small">iPhoneの写真アプリの動画（MOV・HEVC）もそのまま選べます。正面から全身が映った1射分</span>
+    </label>
+
+    <div class="preview" id="preview">
+      <div class="small muted" id="fileInfo" style="margin-bottom:6px"></div>
+      <video id="pv" playsinline webkit-playsinline controls muted preload="auto"></video>
+      <div class="range-row">
+        <span>解析範囲</span>
+        <span class="val" id="rStart">0.0s</span>〜<span class="val" id="rEnd">0.0s</span>
+        <button class="btn sm" id="setStart">現在位置を開始に</button>
+        <button class="btn sm" id="setEnd">現在位置を終了に</button>
+        <button class="btn sm ghost" id="resetRange">全体</button>
+      </div>
+    </div>
+
+    <div class="settings">
+      <label class="f">押手（弓手）
+        <select id="optHand"><option value="auto">自動判定</option><option value="L">左手（右射）</option><option value="R">右手（左射）</option></select>
+      </label>
+      <label class="f">打起し
+        <select id="optStyle"><option value="shomen">正面打起し</option><option value="shamen">斜面打起し</option></select>
+      </label>
+      <label class="f">解析の細かさ
+        <select id="optFps"><option value="10">粗い（速い・10コマ/秒）</option><option value="15" selected>標準（15コマ/秒）</option><option value="24">細かい（24コマ/秒）</option></select>
+      </label>
+      <label class="f">骨格推定モデル
+        <select id="optModel"><option value="lite">軽量（スマホ向け）</option><option value="full" selected>標準（高精度）</option></select>
+      </label>
+    </div>
+
+    <div class="row">
+      <button class="btn primary" id="run" disabled>解析を開始</button>
+      <button class="btn" id="demo">合成サンプルで試す</button>
+    </div>
+
+    <div class="progress" id="progress">
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="row small muted"><span id="progText">準備中…</span><button class="btn sm ghost" id="cancel">中止</button></div>
+    </div>
+    <div class="err" id="err"></div>
+
+    <details class="tips">
+      <summary>うまく解析するための撮り方</summary>
+      <ul>
+        <li>射手の<strong>正面（胸側）</strong>から、三脚などで固定して撮影する。的は画面の横方向になる</li>
+        <li>頭から足先まで全身が入る距離で、弓の上端が切れても構わない</li>
+        <li>逆光や暗い道場は避け、射手と背景の色がはっきり分かれる位置から撮る</li>
+        <li>画面に他の人が映り込まないようにする（いちばん大きく映った人を解析する）</li>
+        <li>解析は端末の中だけで行い、動画はどこにも送信されない</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- 結果 -->
+  <div id="results">
+    <section class="card">
+      <div class="summary">
+        <div class="score" id="scoreBox">
+          <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="var(--grid)" stroke-width="10"/><circle id="scoreArc" cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" stroke-dasharray="0 999"/></svg>
+          <div class="num"><b id="scoreNum">–</b><span>射形スコア</span></div>
+        </div>
+        <div>
+          <h2 style="margin-bottom:4px">主な課題</h2>
+          <div class="counts" id="counts"></div>
+          <ul class="issues" id="issues"></ul>
+          <div class="row" style="margin-top:12px">
+            <button class="btn sm" id="copy">結果をテキストでコピー</button>
+            <button class="btn sm ghost" id="again">別の動画を解析</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>骨格と基準線</h2>
+      <div class="stage" id="stage">
+        <video id="mv" playsinline webkit-playsinline muted preload="auto"></video>
+        <canvas id="ov"></canvas>
+        <div class="phase-tag" id="phaseTag">–</div>
+      </div>
+      <div class="ctrl">
+        <button class="btn sm" id="play">▶ 再生</button>
+        <button class="btn sm ghost" id="stepB" aria-label="1コマ戻る">◀︎ 1コマ</button>
+        <button class="btn sm ghost" id="stepF" aria-label="1コマ進む">1コマ ▶︎</button>
+        <select id="speed" aria-label="再生速度"><option value="0.25">0.25倍</option><option value="0.5" selected>0.5倍</option><option value="1">1倍</option></select>
+        <span class="time" id="timeLbl">0.00s</span>
+      </div>
+      <div class="tl" id="tl"><div class="base"></div><div class="head" id="tlHead"></div></div>
+      <div class="toggles">
+        <label><input type="checkbox" id="tgSkel" checked> 骨格</label>
+        <label><input type="checkbox" id="tgGuide" checked> 基準線（肩線・腰線・縦線・矢の線）</label>
+        <label><input type="checkbox" id="tgVideo" checked> 映像</label>
+      </div>
+      <div class="live" id="live"></div>
+    </section>
+
+    <section class="card">
+      <h2>節目の静止画</h2>
+      <div class="snaps" id="snaps"></div>
+    </section>
+
+    <section class="card">
+      <h2>時間の推移</h2>
+      <div class="charts">
+        <div class="chart" id="chD"><div class="ttl">弓の引き幅（両手首の間隔 ÷ 肩幅）</div><div class="cap">会で平らに保たれ、離れで跳ね上がるのが理想</div><canvas></canvas><div class="tip"></div></div>
+        <div class="chart" id="chL"><div class="ttl">胴の左右の傾き（度）</div><div class="cap">＋は的側（懸かる）、−は的と反対側（退く）。0付近が理想</div><canvas></canvas><div class="tip"></div></div>
+      </div>
+      <div class="legend-phases" id="legendPh"></div>
+    </section>
+
+    <div id="phaseCards"></div>
+
+    <section class="card">
+      <h2>この診断について</h2>
+      <ul class="note">
+        <li>骨格推定AI（MediaPipe Pose）で関節位置を2次元で推定し、射法八節の節目を自動で区切って計測しています。奥行き方向の歪み（反る・屈む、弓の入れ方、手の内）は正面の映像では測れません。</li>
+        <li>基準値は一般的な射法の目安で、流派・体格・指導方針により異なります。判定は「気付きのきっかけ」とし、最終的には指導者の見立てを優先してください。</li>
+        <li>弓や袴で関節が隠れると推定がずれます。値が明らかにおかしい場合は撮影位置や明るさを変えて撮り直してください。</li>
+      </ul>
+    </section>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ==================== 定数 ==================== */
+const MP_VER = "1.2.0";
+const MP_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}`;
+const MODEL_URL = {
+  lite: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+  full: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+  heavy: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task",
+};
+const I = {nose:0,lEye:2,rEye:5,lEar:7,rEar:8,mL:9,mR:10,lSh:11,rSh:12,lEl:13,rEl:14,lWr:15,rWr:16,lHip:23,rHip:24,lKn:25,rKn:26,lAn:27,rAn:28};
+const BONES = [[11,12],[11,13],[13,15],[12,14],[14,16],[15,19],[16,20],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,29],[29,31],[27,31],[28,30],[30,32],[28,32]];
+const PHASES = {
+  kamae:{name:"足踏み〜弓構え",color:"--s1"},
+  uchi:{name:"打起し",color:"--s2"},
+  hiki:{name:"引分け",color:"--s3"},
+  kai:{name:"会",color:"--s4"},
+  hanare:{name:"離れ",color:"--s5"},
+  zan:{name:"残心",color:"--s6"},
+  after:{name:"弓倒し",color:"--s0"},
+};
+const PH_ORDER = ["kamae","uchi","hiki","kai","hanare","zan","after"];
+const STATUS = {good:{lbl:"良好",ic:"✓",w:100},warn:{lbl:"注意",ic:"!",w:50},bad:{lbl:"要改善",ic:"✕",w:0},na:{lbl:"計測不可",ic:"–"},info:{lbl:"参考",ic:"i"}};
+
+/* ==================== 小道具 ==================== */
+const $ = s => document.querySelector(s);
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const deg = r => r*180/Math.PI;
+const sub = (a,b)=>({x:a.x-b.x,y:a.y-b.y});
+const mid = (a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+const dist = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const median = arr => { const a = arr.filter(Number.isFinite).sort((x,y)=>x-y); if(!a.length) return NaN; const m=a.length>>1; return a.length%2?a[m]:(a[m-1]+a[m])/2; };
+const pct = (arr,p)=>{ const a=arr.filter(Number.isFinite).sort((x,y)=>x-y); if(!a.length) return NaN; return a[clamp(Math.round(p*(a.length-1)),0,a.length-1)]; };
+const stdev = arr => { const a=arr.filter(Number.isFinite); if(a.length<2) return NaN; const m=a.reduce((s,v)=>s+v,0)/a.length; return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length); };
+function ang3(a,b,c){ const u=sub(a,b), v=sub(c,b); const d=(u.x*v.x+u.y*v.y)/(Math.hypot(u.x,u.y)*Math.hypot(v.x,v.y)||1); return deg(Math.acos(clamp(d,-1,1))); }
+const sgn = v => (v>0?"+":v<0?"−":"±");
+const f1 = v => Math.abs(v).toFixed(1);
+const tiltTxt=(v,a,b)=>Math.abs(v)<0.5?"ほぼ水平":`${v>0?a:b}が${f1(v)}°高い`;
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ==================== 状態 ==================== */
+const S = {
+  file:null, url:null, range:[0,0], dur:0,
+  frames:[], W:0, H:0, fps:15, source:null,
+  res:null, t:0, playing:false, cancel:false,
+  show:{skel:true,guide:true,video:true}
+};
+let landmarker=null, landmarkerKey=null, mpTs=0;
+
+/* ==================== 入力 ==================== */
+const fileIn=$("#file"), drop=$("#drop"), pv=$("#pv");
+fileIn.addEventListener("change",()=>{ if(fileIn.files[0]) setFile(fileIn.files[0]); });
+["dragenter","dragover"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",ev=>{ const f=ev.dataTransfer.files[0]; if(f&&f.type.startsWith("video")) setFile(f); });
+
+function setFile(f){
+  S.file=f; S.dur=0; if(S.url) URL.revokeObjectURL(S.url);
+  S.url=URL.createObjectURL(f);
+  hideErr();
+  $("#preview").style.display="block";
+  $("#fileInfo").textContent=`${f.name||"動画"}（${(f.size/1048576).toFixed(0)}MB）を読み込み中…`;
+  $("#rStart").textContent="–"; $("#rEnd").textContent="–";
+  pv.muted=true; pv.src=S.url;
+  const onMeta=()=>{
+    if(S.dur || !Number.isFinite(pv.duration) || pv.duration<=0) return;
+    S.dur=pv.duration; S.range=[0,pv.duration]; showRange();
+    $("#fileInfo").textContent=`${f.name||"動画"}　${pv.duration.toFixed(1)}秒・${pv.videoWidth}×${pv.videoHeight}`;
+  };
+  pv.onloadedmetadata=pv.ondurationchange=pv.onloadeddata=pv.oncanplay=onMeta;
+  pv.onerror=()=>{ $("#fileInfo").textContent=""; showErr(videoErrMsg(pv.error)); };
+  try{ pv.load(); }catch(_){}
+  // iPhoneのSafariは自動で読み込まないため、選んだ時点で解析ボタンを有効にする
+  $("#run").disabled=false;
+}
+function videoErrMsg(e){
+  const c=e&&e.code;
+  if(c===4 && IS_FIREFOX && !/FxiOS/i.test(navigator.userAgent)) return "Firefox ではiPhoneで撮ったHEVC形式の動画を再生できないことがあります。<br><span class='small'>iPhoneの「設定 → カメラ → フォーマット」を「互換性優先」にして撮るとMP4（H.264）になり、Firefoxでも読み込めます。今ある動画は、ショートカットアプリの「メディアをエンコード」（HEVCをオフ）で変換できます。</span>";
+  if(c===4) return "この形式の動画はこのブラウザでは再生できません。<br><span class='small'>iPhoneで撮った動画（HEVC形式）は、iPhoneやMacのSafariなら再生できます。WindowsやAndroidで使う場合は、iPhoneの「設定 → カメラ → フォーマット」を「互換性優先」にして撮り直すとMP4（H.264）になり、どの端末でも読み込めます。</span>";
+  if(c===3) return "動画のデコード中にエラーが起きました。別の動画で試すか、写真アプリで書き出し直してください。";
+  if(c===2) return "動画の読み込み中にエラーが起きました。iCloudにある動画は一度端末にダウンロードしてから選んでください。";
+  return "動画を読み込めませんでした。";
+}
+function getAV(){
+  let v=document.getElementById("av");
+  if(!v){
+    v=document.createElement("video"); v.id="av";
+    v.muted=true; v.defaultMuted=true; v.playsInline=true; v.preload="auto";
+    v.setAttribute("muted",""); v.setAttribute("playsinline",""); v.setAttribute("webkit-playsinline","");
+    // display:none だとiPhoneでコマが描画されないので、画面隅に極小で置く
+    v.style.cssText="position:fixed;left:0;bottom:0;width:4px;height:4px;opacity:0.01;pointer-events:none;z-index:-1";
+    document.body.appendChild(v);
+  }
+  return v;
+}
+function waitMeta(v,ms){
+  return new Promise((res,rej)=>{
+    const ok=()=>v.readyState>=1&&Number.isFinite(v.duration)&&v.duration>0&&v.videoWidth>0;
+    if(ok()){ res(); return; }
+    const tm=setTimeout(()=>{ clean(); rej(new Error("TIMEOUT")); },ms);
+    const chk=()=>{ if(ok()){ clean(); res(); } };
+    const err=()=>{ clean(); rej(v.error||new Error("ERR")); };
+    const ev=["loadedmetadata","loadeddata","durationchange","canplay"];
+    const clean=()=>{ clearTimeout(tm); ev.forEach(e=>v.removeEventListener(e,chk)); v.removeEventListener("error",err); };
+    ev.forEach(e=>v.addEventListener(e,chk)); v.addEventListener("error",err);
+  });
+}
+function showRange(){ $("#rStart").textContent=S.range[0].toFixed(1)+"s"; $("#rEnd").textContent=S.range[1].toFixed(1)+"s"; }
+$("#setStart").onclick=()=>{ S.range[0]=Math.min(pv.currentTime,S.range[1]-1); showRange(); };
+$("#setEnd").onclick=()=>{ S.range[1]=Math.max(pv.currentTime,S.range[0]+1); showRange(); };
+$("#resetRange").onclick=()=>{ S.range=[0,S.dur]; showRange(); };
+function showErr(m){ const e=$("#err"); e.innerHTML=m; e.style.display="block"; }
+function hideErr(){ $("#err").style.display="none"; }
+
+$("#run").onclick=()=>{
+  if(!S.file) return;
+  // タップ直後（ユーザー操作の中）で動画の読み込みと再生許可を取っておく（iPhone対策）
+  const av=getAV();
+  if(av.dataset.url!==S.url){ av.src=S.url; av.dataset.url=S.url; try{av.load();}catch(_){} }
+  const pr=av.play(); if(pr&&pr.then) pr.then(()=>av.pause()).catch(()=>{});
+  const mv=$("#mv"); if(mv.dataset.url!==S.url){ mv.src=S.url; mv.dataset.url=S.url; try{mv.load();}catch(_){} }
+  const pm=mv.play(); if(pm&&pm.then) pm.then(()=>mv.pause()).catch(()=>{});
+  runVideo(av).catch(e=>{ console.error(e); setBusy(false); showErr("解析中にエラーが発生しました："+esc(e.message||e)); });
+};
+$("#demo").onclick=()=>{ hideErr(); const d=makeDemo(); S.source="demo"; S.W=d.W; S.H=d.H; S.fps=d.fps; finishAnalysis(d.frames); };
+$("#cancel").onclick=()=>{ S.cancel=true; };
+$("#again").onclick=()=>backToInput();
+function backToInput(){ pause(); $("#results").style.display="none"; $("#floatBack").style.display="none";
+  (S.mode==="cam"?$("#camCard"):$("#inputCard")).scrollIntoView({behavior:"smooth"}); }
+
+function setBusy(b,txt){
+  $("#progress").style.display=b?"block":"none";
+  $("#run").disabled=b||!S.file; $("#demo").disabled=b;
+  if(txt) $("#progText").textContent=txt;
+}
+function setProg(p,txt){ $("#barFill").style.width=(p*100).toFixed(1)+"%"; if(txt) $("#progText").textContent=txt; }
+
+/* ==================== 骨格推定 ==================== */
+const IS_FIREFOX = /Firefox|FxiOS/i.test(navigator.userAgent);
+const MPX = {mod:null,fs:null,opt:null,delegate:null,gpuFails:0};
+// 推定1コマ。GPUで失敗が続く環境（一部のFirefoxなど）では自動でCPUに切り替える
+async function detectPose(src,ts){
+  try{
+    const r=landmarker.detectForVideo(src,ts);
+    return r&&r.landmarks&&r.landmarks[0] ? r.landmarks[0].map(p=>({x:p.x,y:p.y,v:p.visibility??1})) : null;
+  }catch(e){
+    console.warn(e);
+    if(MPX.delegate==="GPU" && ++MPX.gpuFails>=3 && MPX.mod){
+      try{ landmarker.close(); }catch(_){}
+      landmarker=await MPX.mod.PoseLandmarker.createFromOptions(MPX.fs,MPX.opt("CPU")); MPX.delegate="CPU";
+      mpTs+=1000;
+    }
+    return null;
+  }
+}
+const LOCAL_MODEL = {lite:"models/pose_landmarker_lite.wasm", full:"models/pose_landmarker_full.wasm"};
+async function loadModel(q){
+  if(landmarker && landmarkerKey===q) return;
+  setProg(0,"骨格推定モデルを読み込み中…（初回は数十秒かかることがあります）");
+  if(landmarker){ try{landmarker.close();}catch(_){} landmarker=null; }
+  const here=(p)=>new URL(p,location.href).href;
+  // ページに同梱したファイルを優先し、無ければCDNから読む
+  const tries=[];
+  if(/^https?:$/.test(location.protocol)) tries.push({base:here("mp").replace(/\/$/,""),model:here(LOCAL_MODEL[q])});
+  tries.push({base:MP_BASE,model:MODEL_URL[q]});
+  let lastErr;
+  for(const tr of tries){
+    try{
+      const mod=await import(`${tr.base}/vision_bundle.mjs`);
+      const fs=await mod.FilesetResolver.forVisionTasks(`${tr.base}/wasm`);
+      const opt=d=>({baseOptions:{modelAssetPath:tr.model,delegate:d},runningMode:"VIDEO",numPoses:1,
+        minPoseDetectionConfidence:0.5,minPosePresenceConfidence:0.5,minTrackingConfidence:0.5});
+      try{ landmarker=await mod.PoseLandmarker.createFromOptions(fs,opt("GPU")); MPX.delegate="GPU"; }
+      catch(e){ console.warn("GPU不可、CPUで実行",e); landmarker=await mod.PoseLandmarker.createFromOptions(fs,opt("CPU")); MPX.delegate="CPU"; }
+      MPX.mod=mod; MPX.fs=fs; MPX.opt=opt; MPX.gpuFails=0;
+      landmarkerKey=q; return;
+    }catch(e){ console.warn("モデル読み込み失敗",tr.base,e); lastErr=e; }
+  }
+  throw lastErr||new Error("モデルを読み込めませんでした");
+}
+
+let rvfcOK=null;
+function seekTo(v,t){
+  return new Promise(res=>{
+    if(Math.abs(v.currentTime-t)<1e-4 && v.readyState>=2){ res(); return; }
+    let done=false; const fin=()=>{ if(done) return; done=true; v.removeEventListener("seeked",onS); res(); };
+    const onS=()=>{
+      if(v.requestVideoFrameCallback && rvfcOK!==false){
+        let got=false; v.requestVideoFrameCallback(()=>{got=true; rvfcOK=true; fin();});
+        setTimeout(()=>{ if(!got){ if(rvfcOK===null) rvfcOK=false; fin(); } }, rvfcOK? 400 : 120);
+      } else fin();
+    };
+    v.addEventListener("seeked",onS);
+    setTimeout(fin,4000);
+    v.currentTime=t;
+  });
+}
+
+function isBlank(ctx,w,h){
+  try{ const d=ctx.getImageData(0,0,w,h).data; const step=Math.max(4,Math.floor(d.length/4/400)*4);
+    let mx=0; for(let i=0;i<d.length;i+=step) mx=Math.max(mx,d[i],d[i+1],d[i+2]); return mx<8; }catch(_){ return false; }
+}
+async function runVideo(av){
+  hideErr(); S.cancel=false; setBusy(true,"動画を準備中…");
+  const q=$("#optModel").value, fps=+$("#optFps").value;
+  try{ await waitMeta(av,30000); }
+  catch(e){ setBusy(false); showErr(e&&e.message==="TIMEOUT"?"動画の読み込みに時間がかかりすぎています。iCloudにある動画は写真アプリで一度再生して端末にダウンロードしてから、もう一度選んでください。":videoErrMsg(av.error)); return; }
+  try{ av.pause(); }catch(_){}
+  try{ await loadModel(q); }
+  catch(e){ setBusy(false); showErr("骨格推定モデルを読み込めませんでした。インターネット接続を確認してください。<br><span class='small'>"+esc(e.message||e)+"</span>"); return; }
+  if(!S.dur){ S.dur=av.duration; S.range=[0,av.duration]; showRange(); }
+  S.W=av.videoWidth; S.H=av.videoHeight; S.fps=fps; S.source="video";
+  // 4Kなどの大きな動画は縮小してから推定（速度とメモリ対策）
+  const sc=Math.min(1,960/Math.max(S.W,S.H));
+  const pc=document.createElement("canvas"); pc.width=Math.round(S.W*sc); pc.height=Math.round(S.H*sc);
+  const pctx=pc.getContext("2d",{willReadFrequently:true});
+  const t0=clamp(S.range[0],0,av.duration), t1=clamp(S.range[1],t0,av.duration-0.01);
+  const n=Math.max(2,Math.floor((t1-t0)*fps)+1);
+  const raw=[]; const st=performance.now(); let blankCount=0;
+  for(let i=0;i<n;i++){
+    if(S.cancel){ setBusy(false); setProg(0); return; }
+    const t=Math.min(t1,t0+i/fps);
+    await seekTo(av,t);
+    pctx.drawImage(av,0,0,pc.width,pc.height);
+    if(i<3 && isBlank(pctx,pc.width,pc.height)){
+      // iPhoneで一度も再生していない動画は黒いコマになることがあるので、少しだけ再生して起こす
+      try{ await av.play(); await new Promise(r=>setTimeout(r,150)); av.pause(); }catch(_){}
+      await seekTo(av,t+0.001); pctx.drawImage(av,0,0,pc.width,pc.height);
+      if(isBlank(pctx,pc.width,pc.height)) blankCount++;
+    }
+    mpTs += 1000/fps + 1;
+    let lm=null;
+    lm=await detectPose(pc,Math.round(mpTs));
+    raw.push({t,lm});
+    if(i%3===0){ const el=(performance.now()-st)/1000, eta=el/(i+1)*(n-i-1); setProg((i+1)/n,`骨格を推定中… ${i+1}/${n}コマ（残り約${Math.ceil(eta)}秒）`); await new Promise(r=>setTimeout(r,0)); }
+  }
+  const ok=raw.filter(r=>r.lm).length;
+  if(ok<n*0.4){ setBusy(false);
+    showErr(blankCount>=3?"動画のコマを取り出せませんでした（真っ黒になります）。ブラウザで直接開いているか確認し、写真アプリで一度再生してからもう一度選んでください。":`人物を検出できたコマが少なすぎます（${ok}/${n}）。全身が映るように撮影し直してください。`); return; }
+  setProg(1,"射法八節を区切っています…");
+  await finishAnalysis(raw);
+}
+
+/* ==================== 前処理 ==================== */
+function preprocess(raw,W,H,fps){
+  // 先頭・末尾の未検出コマを除く
+  let a=0,b=raw.length-1; while(a<b&&!raw[a].lm) a++; while(b>a&&!raw[b].lm) b--;
+  const R=raw.slice(a,b+1), n=R.length;
+  const P=[]; // P[i][k]={x,y,v} (px)
+  for(let k=0;k<33;k++){
+    const xs=new Array(n), ys=new Array(n), vs=new Array(n);
+    for(let i=0;i<n;i++){ const l=R[i].lm; if(l){ xs[i]=l[k].x*W; ys[i]=l[k].y*H; vs[i]=l[k].v; } }
+    // 欠損を線形補間
+    for(let i=0;i<n;i++){ if(xs[i]===undefined){ let j=i; while(j<n&&xs[j]===undefined) j++; const L=i-1, Rr=j<n?j:L;
+      for(let m=i;m<j;m++){ const w=(Rr===L)?0:(m-L)/(Rr-L); xs[m]=xs[L]+(xs[Rr]-xs[L])*w; ys[m]=ys[L]+(ys[Rr]-ys[L])*w; vs[m]=0.3; } i=j-1; } }
+    // 中心移動平均
+    const w=fps>=20?2:1, sx=[],sy=[];
+    for(let i=0;i<n;i++){ let cx=0,cy=0,c=0; for(let d=-w;d<=w;d++){ const j=i+d; if(j>=0&&j<n){cx+=xs[j];cy+=ys[j];c++;} } sx[i]=cx/c; sy[i]=cy/c; }
+    for(let i=0;i<n;i++){ (P[i]||(P[i]=[]))[k]={x:sx[i],y:sy[i],v:vs[i]}; }
+  }
+  return R.map((r,i)=>({t:r.t,p:P[i],det:!!r.lm}));
+}
+
+function baseFeatures(F,fps){
+  for(const f of F){
+    const p=f.p;
+    f.shMid=mid(p[I.lSh],p[I.rSh]); f.hipMid=mid(p[I.lHip],p[I.rHip]);
+    f.S=dist(p[I.lSh],p[I.rSh]); f.T=dist(f.shMid,f.hipMid);
+    f.wrMid=mid(p[I.lWr],p[I.rWr]);
+    f.mouth=mid(p[I.mL],p[I.mR]);
+    f.ankMid=mid(p[I.lAn],p[I.rAn]);
+  }
+  const Sm=median(F.map(f=>f.S)), Tm=median(F.map(f=>f.T));
+  for(let i=0;i<F.length;i++){
+    const f=F[i], p=f.p;
+    f.D=dist(p[I.lWr],p[I.rWr])/Sm;
+    f.Hh=(f.shMid.y-f.wrMid.y)/Tm;
+    const a=F[Math.max(0,i-1)], b=F[Math.min(F.length-1,i+1)], dt=(b.t-a.t)||1/fps;
+    f.vL=dist(a.p[I.lWr],b.p[I.lWr])/Tm/dt; f.vR=dist(a.p[I.rWr],b.p[I.rWr])/Tm/dt;
+    f.v=Math.max(f.vL,f.vR);
+  }
+  return {Sm,Tm};
+}
+
+/* ==================== 射法八節の区切り ==================== */
+function detectPhases(F,fps){
+  const n=F.length, D=F.map(f=>f.D), H=F.map(f=>f.Hh), V=F.map(f=>f.v);
+  const fail=(why)=>({ok:false,why});
+  if(n<fps*3) return fail("動画が短すぎます（3秒以上必要）");
+  const Dmax=pct(D,0.97);
+  if(!(Dmax>1.45)) return fail("弓を引き分けた姿勢（会）が見つかりませんでした");
+  const firstHigh=D.findIndex(d=>d>=1.3);
+  // 離れ：手首の速度が最大になるところ
+  let r=-1, vmax=0;
+  const g2=Math.max(1,Math.round(0.12*fps));
+  for(let i=Math.max(firstHigh,g2);i<n-1;i++){ const dA=D[i-g2], dB=D[Math.min(n-1,i+g2)]; if(dA<1.3 || dB<dA*0.95) continue; if(V[i]>vmax){vmax=V[i];r=i;} }
+  if(r<0||vmax<1.2) return fail("離れの瞬間を検出できませんでした");
+  let r0=r; while(r0>firstHigh+1 && V[r0-1]>0.35*vmax) r0--;
+  // 会：両拳が引き納めた位置（口割り・押手の高さ）に収まり、引き幅を保って（伸び合って）いる間だけ数える
+  const kaiEnd=Math.max(0,r0-1);
+  const Tm=median(F.map(f=>f.T));
+  const ref=F.slice(Math.max(0,kaiEnd-Math.round(0.3*fps)),kaiEnd+1);
+  const Dk=median(ref.map(f=>f.D));
+  const yL=median(ref.map(f=>f.p[I.lWr].y)), yR=median(ref.map(f=>f.p[I.rWr].y));
+  const xL=median(ref.map(f=>f.p[I.lWr].x)), xR=median(ref.map(f=>f.p[I.rWr].x));
+  const w=Math.max(1,Math.round(0.15*fps));
+  const rate=(arr,i)=>{ const a=Math.max(0,i-w), b=Math.min(n-1,i+w); return (arr[b]-arr[a])/((F[b].t-F[a].t)||1); };
+  const yLs=F.map(f=>f.p[I.lWr].y/Tm), yRs=F.map(f=>f.p[I.rWr].y/Tm);
+  const settled=i=>{
+    const f=F[i];
+    const inPos = D[i]>=0.965*Dk
+      && Math.abs(f.p[I.lWr].y-yL)/Tm<=0.07 && Math.abs(f.p[I.rWr].y-yR)/Tm<=0.07
+      && Math.abs(f.p[I.lWr].x-xL)/Tm<=0.2 && Math.abs(f.p[I.rWr].x-xR)/Tm<=0.2;   // 引き納めた位置に収まっている
+    const still = Math.abs(rate(yLs,i))<0.22 && Math.abs(rate(yRs,i))<0.22 && V[i]<0.6; // 上下に動いていない（引分けが終わっている）
+    const nobi  = rate(D,i) > -0.15;                                                  // 引き幅が縮んでいない（伸び合い）
+    return inPos && still && nobi;
+  };
+  let kaiStart=kaiEnd, miss=0; const tol=Math.max(1,Math.round(0.15*fps));
+  for(let i=kaiEnd;i>=0;i--){
+    if(settled(i)){kaiStart=i;miss=0;} else if(++miss>tol) break;
+  }
+  if(kaiStart>=kaiEnd) kaiStart=Math.max(0,kaiEnd-1);
+  // 打起し（両拳が最も高い所）
+  let u=0, hu=-Infinity; for(let i=0;i<kaiStart;i++){ if(H[i]>hu){hu=H[i];u=i;} }
+  const H0=median(H.slice(0,Math.max(3,Math.round(u*0.15))));
+  const hasUchi = u>0 && hu>H0+0.6 && hu>0.2;
+  let raiseStart=0, uEnd=u;
+  if(hasUchi){
+    raiseStart=u; while(raiseStart>0 && H[raiseStart-1]>H0+0.2*(hu-H0)) raiseStart--;
+    while(uEnd+1<kaiStart && H[uEnd+1]>=hu-0.06) uEnd++;
+  }
+  const zanStart=Math.min(n-1,r0+Math.max(2,Math.round(0.35*fps)));
+  let zanEnd=Math.min(n-1,r0+Math.round(2.2*fps));
+  for(let i=zanStart+1;i<=zanEnd;i++){ if(H[i]<H[zanStart]-0.6){ zanEnd=i-1; break; } }
+  const ph={};
+  const put=(k,s,e)=>{ if(e>=s && s>=0) ph[k]={s,e,t0:F[s].t,t1:F[e].t}; };
+  if(hasUchi){ put("kamae",0,raiseStart-1); put("uchi",raiseStart,uEnd); put("hiki",uEnd+1,kaiStart-1); }
+  else { put("hiki",0,kaiStart-1); }
+  put("kai",kaiStart,kaiEnd); put("hanare",r0,zanStart-1); put("zan",zanStart,zanEnd);
+  if(zanEnd<n-1) put("after",zanEnd+1,n-1);
+  return {ok:true,ph,u:hasUchi?u:-1,r0,kaiStart,kaiEnd,hasUchi};
+}
+
+/* ==================== 押手側を決めて指標を出す ==================== */
+function sideFeatures(F,hand){
+  const O = hand==="L" ? {sh:I.lSh,el:I.lEl,wr:I.lWr,hip:I.lHip} : {sh:I.rSh,el:I.rEl,wr:I.rWr,hip:I.rHip};
+  const K = hand==="L" ? {sh:I.rSh,el:I.rEl,wr:I.rWr,hip:I.rHip} : {sh:I.lSh,el:I.lEl,wr:I.lWr,hip:I.lHip};
+  const dir = Math.sign(median(F.map(f=>f.p[O.sh].x-f.p[K.sh].x)))||1; // 画面上で的のある向き
+  const tilt=(o,k)=>deg(Math.atan2(k.y-o.y,Math.abs(o.x-k.x)+1e-6)); // ＋＝押手側が高い
+  for(const f of F){
+    const p=f.p;
+    f.oSh=p[O.sh]; f.kSh=p[K.sh]; f.oEl=p[O.el]; f.kEl=p[K.el]; f.oWr=p[O.wr]; f.kWr=p[K.wr];
+    const sp=sub(f.shMid,f.hipMid);
+    f.lean=deg(Math.atan2(sp.x*dir,-sp.y));
+    f.shTilt=tilt(p[O.sh],p[K.sh]);
+    f.hipTilt=tilt(p[O.hip],p[K.hip]);
+    f.arrow=tilt(p[O.wr],p[K.wr]);
+    f.elbO=ang3(p[O.sh],p[O.el],p[O.wr]);
+    f.elbK=ang3(p[K.sh],p[K.el],p[K.wr]);
+    const shv=sub(p[O.sh],p[K.sh]);
+    f.cross=deg(Math.acos(clamp((sp.x*shv.x+sp.y*shv.y)/(Math.hypot(sp.x,sp.y)*Math.hypot(shv.x,shv.y)||1),-1,1)))-90;
+    f.visO=Math.min(p[O.el].v,p[O.wr].v); f.visK=Math.min(p[K.el].v,p[K.wr].v);
+    f.visFeet=Math.min(p[I.lAn].v,p[I.rAn].v);
+  }
+  return {dir,O,K};
+}
+
+function autoHand(F,P){
+  const kai=P.ok?P.ph.kai:null;
+  const rng = kai ? F.slice(kai.s,kai.e+1) : F;
+  const aL=median(rng.map(f=>ang3(f.p[I.lSh],f.p[I.lEl],f.p[I.lWr])));
+  const aR=median(rng.map(f=>ang3(f.p[I.rSh],f.p[I.rEl],f.p[I.rWr])));
+  return aL>=aR?"L":"R";
+}
+
+/* ==================== 判定 ==================== */
+function grade(v,good,warn){ if(!Number.isFinite(v)) return "na"; if(good(v)) return "good"; if(warn(v)) return "warn"; return "bad"; }
+const absIn=(lim)=>v=>Math.abs(v)<=lim;
+
+function computeMetrics(F,P,ctx){
+  const {Sm,Tm,dir,style}=ctx; const M=[];
+  const seg=k=>P.ph&&P.ph[k]?F.slice(P.ph[k].s,P.ph[k].e+1):[];
+  const md=(arr,fn)=>median(arr.map(fn));
+  const at=(arr)=>arr.length?arr[arr.length>>1].t:null;
+  const add=(o)=>M.push(o);
+
+  // ---- 足踏み・胴造り：会より前の静止した構え（無ければ先頭）
+  let base=seg("kamae");
+  if(base.length<3) base=F.slice(0,Math.max(3,Math.round(F.length*0.12)));
+  const tBase=at(base);
+  const feetVis=md(base,f=>f.visFeet);
+  // 足幅
+  const stance=md(base,f=>dist(f.p[I.lAn],f.p[I.rAn]));
+  const height=md(base,f=>(f.ankMid.y-f.p[I.nose].y)/0.87);
+  const sr=feetVis>0.4?stance/height:NaN;
+  add({grp:"ashibumi",nm:"足踏みの幅",val:Number.isFinite(sr)?`身長の${(sr*100).toFixed(0)}%`:"–",ideal:"矢束（身長の約半分）が目安",t:tBase,
+    st:grade(sr,v=>v>=0.42&&v<=0.56,v=>v>=0.37&&v<=0.62),
+    adv:!Number.isFinite(sr)?"足元が映っていないため計測できません。":sr<0.42?"足踏みが狭く、下半身の土台が小さくなっています。矢束（自分の矢の長さ）を目安に広げると、会で上体が揺れにくくなります。":sr>0.56?"足踏みが広すぎます。腰が落ちて上体が硬くなりやすいので、矢束を目安に狭めてください。":"矢束に近い幅で、安定した足踏みです。"});
+  // 重心（腰の位置）
+  const hs=md(base,f=>(f.hipMid.x-f.ankMid.x)*dir)/stance;
+  add({grp:"ashibumi",nm:"腰の位置（左右）",val:!(Number.isFinite(hs)&&feetVis>0.4)?"–":Math.abs(hs)<0.01?"ほぼ中央":`${hs>0?"的側":"反対側"}へ足幅の${f1(hs*100)}%`,ideal:"両足の真ん中",t:tBase,
+    st:feetVis>0.4?grade(hs,absIn(0.06),absIn(0.12)):"na",
+    adv:!(feetVis>0.4)?"足元が映っていないため計測できません。":Math.abs(hs)<=0.06?"両足の中央に腰が据わっています。":hs>0?"腰が的側の足に寄っています。体重を両足の拇指球に均等に乗せ、腰を足踏みの中央に据え直しましょう。":"腰が的と反対側の足に寄っています（退く方向）。両足に均等に体重を乗せ、腰を中央に据え直しましょう。"});
+  // 胴の傾き
+  const lb=md(base,f=>f.lean);
+  add({grp:"dou",nm:"胴の左右の傾き",val:`${sgn(lb)}${f1(lb)}°`,ideal:"0°（±2.5°以内）",t:tBase,st:grade(lb,absIn(2.5),absIn(5)),
+    adv:Math.abs(lb)<=2.5?"背筋がまっすぐ立ち、縦線が通っています。":lb>0?"上体が的の方へ傾いています（懸かる胴）。腰の上に背骨をまっすぐ積み、頭頂を真上に伸ばす意識を持ちましょう。":"上体が的と反対側へ傾いています（退く胴）。腰の上に背骨をまっすぐ積み、頭頂を真上に伸ばす意識を持ちましょう。"});
+  const sb=md(base,f=>f.shTilt);
+  add({grp:"dou",nm:"肩線の水平",val:tiltTxt(sb,"押手肩","勝手肩"),ideal:"水平（±3°以内）",t:tBase,st:grade(sb,absIn(3),absIn(6)),
+    adv:Math.abs(sb)<=3?"両肩が水平に揃っています。":`構えの段階で${sb>0?"押手（弓手）":"勝手（妻手）"}側の肩が上がっています。息を吐いて両肩を下ろし、肩の線を床と平行にしてから打起しに入りましょう。`});
+  const hb=md(base,f=>f.hipTilt);
+  add({grp:"dou",nm:"腰線の水平",val:tiltTxt(hb,"押手側","勝手側"),ideal:"水平（±3°以内）",t:tBase,st:grade(hb,absIn(3),absIn(6)),
+    adv:Math.abs(hb)<=3?"腰が水平に据わっています。":"腰の高さが左右でずれています。片足に体重が偏っていないか確認し、両膝を軽く伸ばして腰を水平に据えましょう。"});
+  const tj=md(base,f=>f.shTilt-f.hipTilt);
+  add({grp:"dou",nm:"三重十文字（肩線と腰線の平行）",val:`ずれ ${f1(tj)}°`,ideal:"平行（3°以内）",t:tBase,st:grade(tj,absIn(3),absIn(6)),
+    adv:Math.abs(tj)<=3?"肩線と腰線がそろい、三重十文字が整っています。":"肩線と腰線が平行になっていません。上体のねじれや片側への寄りかかりがないか確認しましょう。"});
+
+  if(!P.ok) return M;
+
+  // ---- 打起し
+  if(P.hasUchi){
+    const ui=P.u, w=Math.round(ctx.fps*0.2);
+    const top=F.slice(Math.max(0,ui-w),Math.min(F.length,ui+w+1));
+    const ar=md(top,f=>f.arrow);
+    add({grp:"uchi",nm:"打起しの矢の水平",val:`矢先${ar>0?"上がり":"下がり"} ${f1(ar)}°`,ideal:"水平〜やや矢先下がり（±4°）",t:F[ui].t,st:grade(ar,v=>v>=-4&&v<=3,v=>v>=-8&&v<=6),
+      adv:(ar>=-4&&ar<=3)?"両拳がほぼ同じ高さで、矢が水平に保たれています。":ar>0?"打起しで矢先が上がっています。押手が高すぎるか勝手が低い状態です。両拳を同じ高さに、矢は水平かやや矢先下がりに。":"打起しで矢先が大きく下がっています。勝手が高すぎるか押手が低い状態です。両拳を同じ高さに揃えましょう。"});
+    const hgt=md(top,f=>(f.p[I.nose].y-f.wrMid.y)/Tm);
+    const g = style==="shamen" ? grade(hgt,v=>v>=0.15&&v<=0.8,v=>v>=0&&v<=1.0) : grade(hgt,v=>v>=0.25&&v<=0.8,v=>v>=0.1&&v<=1.0);
+    add({grp:"uchi",nm:"打起しの高さ",val:`拳が鼻より ${(hgt*Tm/Sm*100).toFixed(0)}%肩幅 ${hgt>=0?"上":"下"}`,ideal:"額の上あたり（腕が約45°）",t:F[ui].t,st:g,
+      adv:g==="good"?"適切な高さまで打ち起こせています。":hgt<0.25?"打起しが低めです。低いと引分けで肩が詰まりやすくなります。腕が約45度になるまで、肘から上げる意識で打ち起こしましょう。":"打起しが高すぎます。肩まで一緒に上がりやすいので、拳が額の少し上に来る程度で止めましょう。"});
+    const kb=md(base,f=>f.shMid.y), ku=md(top,f=>f.shMid.y);
+    const lift=(kb-ku)/Tm;
+    add({grp:"uchi",nm:"打起しでの肩の浮き",val:`胴の長さの${(Math.max(0,lift)*100).toFixed(0)}%`,ideal:"肩は下げたまま",t:F[ui].t,st:grade(lift,v=>v<=0.09,v=>v<=0.16),
+      adv:lift<=0.09?"腕だけが上がり、肩は落ち着いています。":"腕と一緒に肩がすくみ上がっています。打起しでは肩を落としたまま、肘から上げる意識を持つと引分けが楽になります。"});
+    const shU=md(top,f=>f.shTilt);
+    add({grp:"uchi",nm:"打起しでの肩線",val:tiltTxt(shU,"押手肩","勝手肩"),ideal:"水平（±4°以内）",t:F[ui].t,st:grade(shU,absIn(4),absIn(7)),
+      adv:Math.abs(shU)<=4?"打起しでも肩線が水平に保たれています。":`打起しで${shU>0?"押手":"勝手"}側の肩が上がっています。両肩を同じように下ろしたまま打ち起こしましょう。`});
+  }
+
+  // ---- 引分け
+  const hk=seg("hiki");
+  if(hk.length>=3){
+    const ar=md(hk,f=>f.arrow);
+    add({grp:"hiki",nm:"引分け中の矢の水平",val:`矢先${ar>0?"上がり":"下がり"} ${f1(ar)}°`,ideal:"水平のまま下ろす（±5°）",t:at(hk),st:grade(ar,absIn(5),absIn(10)),
+      adv:Math.abs(ar)<=5?"矢を水平に保ったまま引き分けられています。":ar>0?"引分けで矢先が上がっています（押手が先に高く残る）。両拳を同時に、水平に下ろしてきましょう。":"引分けで矢先が下がっています（勝手が先に高く残る）。両拳を同時に、水平に下ろしてきましょう。"});
+    const dur=P.ph.hiki.t1-P.ph.hiki.t0;
+    add({grp:"hiki",nm:"引分けにかかった時間",val:`${dur.toFixed(1)}秒`,ideal:"参考値",t:at(hk),st:"info",adv:"急いで引き下ろすと矢の水平や肩の位置が崩れやすくなります。大三でいったん落ち着いてから、ゆっくり均等に引き分けましょう。"});
+  }
+
+  // ---- 会
+  const kai=F.slice(P.kaiStart,P.kaiEnd+1);
+  const kaiLen=P.ph.kai.t1-P.ph.kai.t0+1/ctx.fps;
+  const tKai=kai.length?kai[Math.max(0,kai.length-1-Math.round(ctx.fps*0.25))].t:null;
+  add({grp:"kai",nm:"会の長さ",val:`${kaiLen.toFixed(1)}秒`,ideal:"口割りに収まり伸び合っている時間が3秒以上",t:F[P.kaiStart].t,st:grade(kaiLen,v=>v>=3,v=>v>=1.5),
+    adv:kaiLen>=3?"会で十分に保てています。":kaiLen>=1.5?"会がやや短めです。口割りに納まってから、もう一息ぶん伸び合う時間を作りましょう。":"会がほとんど無く、引き納めてすぐに離れています。早気の傾向がないか確認してください。会で呼吸を整えてから離す練習（巻藁で数を数える等）が有効です。"});
+  const eo=md(kai,f=>f.elbO), visO=md(kai,f=>f.visO);
+  add({grp:"kai",nm:"押手（弓手）の肘の伸び",val:`${eo.toFixed(0)}°`,ideal:"ほぼまっすぐ（165°以上）",t:tKai,st:visO>0.3?grade(eo,v=>v>=165,v=>v>=155):"na",
+    adv:!(visO>0.3)?"押手が隠れていて計測できません。":eo>=165?"押手がまっすぐ伸びています。":"押手の肘が曲がっています（弓手が折れる・負ける）。手の内を整え、肩根から的の中心へ押し続ける意識で伸ばしましょう。"});
+  const ke=md(kai,f=>(f.kSh.y-f.kEl.y)/Tm), visK=md(kai,f=>f.visK);
+  add({grp:"kai",nm:"勝手（妻手）の肘の高さ",val:`肩より${ke>=0?"上":"下"} ${(Math.abs(ke)*100).toFixed(0)}%`,ideal:"肩の高さ〜やや上",t:tKai,st:visK>0.3?grade(ke,v=>v>=-0.08&&v<=0.3,v=>v>=-0.18&&v<=0.45):"na",
+    adv:!(visK>0.3)?"勝手が隠れていて計測できません。":ke<-0.08?"勝手の肘が下がっています。肘が下がると引き込みが浅くなり、離れで矢所が乱れます。肘を肩の線より下げずに、肘で後ろへ回し込む意識を。":ke>0.3?"勝手の肘が上がりすぎています。肩が詰まりやすいので、肘は肩の線の延長上に納めましょう。":"勝手の肘が肩の線上に納まっています。"});
+  const kw=md(kai,f=>(f.kWr.y-f.mouth.y)/Tm);
+  add({grp:"kai",nm:"口割り（勝手の高さ）",val:`手首が口より${kw>=0?"下":"上"} ${(Math.abs(kw)*100).toFixed(0)}%`,ideal:"矢が口の線（手首は少し下）",t:tKai,st:visK>0.3?grade(kw,v=>v>=-0.05&&v<=0.25,v=>v>=-0.15&&v<=0.38):"na",
+    adv:!(visK>0.3)?"勝手が隠れていて計測できません。":kw<-0.05?"勝手が高く、口割りより上で納まっています。矢が口の線に来るまで引き下ろしましょう。":kw>0.25?"勝手が低く、口割りより下で納まっています。頬付けを確かめ、矢が口の線に来る位置で納めましょう。":"口割りの高さに納まっています。"});
+  const ak=md(kai,f=>f.arrow);
+  add({grp:"kai",nm:"会での矢の水平",val:`矢先${ak>0?"上がり":"下がり"} ${f1(ak)}°`,ideal:"水平（±3°以内）",t:tKai,st:grade(ak,absIn(3),absIn(6)),
+    adv:Math.abs(ak)<=3?"矢がほぼ水平に納まっています。":ak>0?"会で矢先が上がっています。押手が高いか、口割りが低い可能性があります。":"会で矢先が下がっています。押手が下がっているか、口割りが高い可能性があります。"});
+  const sk=md(kai,f=>f.shTilt);
+  add({grp:"kai",nm:"会での肩線",val:tiltTxt(sk,"押手肩","勝手肩"),ideal:"水平（±3°以内）",t:tKai,st:grade(sk,absIn(3),absIn(6)),
+    adv:Math.abs(sk)<=3?"両肩が水平に納まっています。":sk>0?"押手（弓手）の肩が上がっています（肩が詰まる）。押手肩を下げ、肩根から押し開く意識で。会で肩が浮くと離れで押手が負けやすくなります。":"勝手（妻手）の肩が上がっています。勝手の肩を下ろし、肘で引き納める意識で。"});
+  const cr=md(kai,f=>f.cross);
+  add({grp:"kai",nm:"縦横十文字（背骨と肩線の直角）",val:`直角から${f1(cr)}°`,ideal:"直角（±3°以内）",t:tKai,st:grade(cr,absIn(3),absIn(6)),
+    adv:Math.abs(cr)<=3?"縦線と横線が直角に交わっています。":"背骨と肩の線が直角になっていません。胴が傾くか片方の肩が浮いています。縦線（足〜頭）をまっすぐ立てたうえで、横線を左右に伸ばしましょう。"});
+  const lk=md(kai,f=>f.lean), dl=lk-lb;
+  add({grp:"kai",nm:"会での胴の傾き",val:`${sgn(lk)}${f1(lk)}°（構えから${sgn(dl)}${f1(dl)}°）`,ideal:"構えのまま（±2.5°）",t:tKai,st:grade(Math.max(Math.abs(lk),Math.abs(dl)),v=>v<=2.5,v=>v<=5),
+    adv:(Math.abs(lk)<=2.5&&Math.abs(dl)<=2.5)?"引分けても胴造りが崩れていません。":lk>0?"会で上体が的側に傾いています（懸かる）。押手で押そうとして体ごと的へ寄っていないか確認しましょう。":"会で上体が的と反対側に傾いています（退く）。勝手で引こうとして体ごと後ろへ逃げていないか確認しましょう。"});
+  const sw=Math.hypot(stdev(kai.map(f=>f.hipMid.x)),stdev(kai.map(f=>f.hipMid.y)))/Tm*100;
+  add({grp:"kai",nm:"会での体の揺れ",val:`${sw.toFixed(1)}%`,ideal:"静止（1.5%未満）",t:tKai,st:kai.length>=4?grade(sw,v=>v<1.5,v=>v<3):"na",
+    adv:!(kai.length>=4)?"会が短すぎて計測できません。":sw<1.5?"会で体が安定しています。":"会で体が揺れています。足踏みと胴造りを見直し、重心を下げて静かに伸び合いましょう。"});
+  if(kai.length>=4){
+    const d0=median(kai.slice(0,Math.max(2,kai.length>>2)).map(f=>f.D)), d1=median(kai.slice(-Math.max(2,kai.length>>2)).map(f=>f.D));
+    const ch=(d1-d0)/d0*100;
+    add({grp:"kai",nm:"伸び合い",val:`会の間に引き幅が${ch>=0?"＋":"−"}${f1(ch)}%`,ideal:"縮まない（−1%以上）",t:tKai,st:grade(ch,v=>v>=-1,v=>v>=-3),
+      adv:ch>=-1?"会の間、引き幅が保たれ（伸びて）います。":"会の間に引き幅が縮んでいます（もたれ・縮み）。会は「止まる」のではなく、左右へ伸び続ける時間です。"});
+  }
+
+  // ---- 離れ
+  const r0=P.r0, fps=ctx.fps;
+  const pre=F.slice(Math.max(0,r0-Math.round(0.25*fps)),Math.max(1,r0-Math.round(0.05*fps)+1));
+  const dKai=median(kai.map(f=>f.D)), dPre=median(pre.map(f=>f.D));
+  const yur=(dPre-dKai)/dKai*100;
+  add({grp:"hanare",nm:"離れ直前の緩み",val:`引き幅 ${yur>=0?"＋":"−"}${f1(yur)}%`,ideal:"緩まない（−2%以上）",t:F[r0].t,st:grade(yur,v=>v>=-2,v=>v>=-4.5),
+    adv:yur>=-2?"離れの直前まで引き幅を保てています。":"離れの直前に勝手が的側へ戻っています（緩み離れ）。指先で弦を放そうとせず、伸び合いの延長で自然に離れるようにしましょう。"});
+  const a=F[Math.max(0,r0-1)], b=F[Math.min(F.length-1,r0+Math.max(2,Math.round(0.25*fps)))];
+  const back=(a.kWr.x-b.kWr.x)*dir, down=(b.kWr.y-a.kWr.y);
+  const ka=deg(Math.atan2(down,Math.abs(back)+1e-6));
+  let kst, kadv, kval;
+  if(back<=0.05*Sm){ kst="bad"; kval="前・内側へ"; kadv="勝手が後ろへ飛ばず、前（的側）に出ています（前離れ・引っかけ）。肘で引き納めた方向へ、弦の力をそのまま後ろへ逃がすように離しましょう。"; }
+  else { kst=grade(ka,v=>v>=-15&&v<=25,v=>v>=-30&&v<=40); kval=`後方へ（${ka>=0?"下向き":"上向き"} ${f1(ka)}°）`;
+    kadv=kst==="good"?"勝手が矢筋の延長方向へまっすぐ離れています。":ka>25?"勝手が下へ落ちるように離れています。肘の高さを保ったまま、矢筋に沿って後ろへ開きましょう。":"勝手が上へ跳ね上がるように離れています。手首や指先で離していないか確認しましょう。"; }
+  add({grp:"hanare",nm:"勝手の離れる方向",val:kval,ideal:"矢筋の延長（真後ろ〜やや下）",t:b.t,st:kst,adv:kadv});
+  const oUp=(a.oWr.y-b.oWr.y)/Tm, oBack=(a.oWr.x-b.oWr.x)*dir/Tm;
+  let ost="good", oadv="押手が的の方向に残っています。";
+  if(oUp>0.18){ ost=oUp>0.3?"bad":"warn"; oadv="離れで押手が上へ跳ねています。手の内で弓を握りすぎていないか、押手の押しが的の中心へ向いているか確認しましょう。"; }
+  else if(oBack>0.15){ ost=oBack>0.28?"bad":"warn"; oadv="離れで押手が手前（体側）へ引けています（押手が緩む）。最後まで的の中心を押し続けましょう。"; }
+  else if(-oUp>0.45){ ost="warn"; oadv="離れで押手が大きく下へ落ちています。打ち切りは自然ですが、落としすぎは押手の負けにつながります。"; }
+  add({grp:"hanare",nm:"押手の動き",val:`上${oUp>=0?"＋":"−"}${f1(oUp*100)}% / 手前${oBack>=0?"＋":"−"}${f1(oBack*100)}%`,ideal:"的の方向へ残る",t:b.t,st:ost,adv:oadv});
+
+  // ---- 残心
+  const zn=seg("zan");
+  if(zn.length>=2){
+    const dz=median(zn.map(f=>f.D)); const ratio=dz/dKai;
+    add({grp:"zan",nm:"残心の開き（大離れ）",val:`会の${(ratio*100).toFixed(0)}%`,ideal:"会より大きく開く（105%以上）",t:at(zn),st:grade(ratio,v=>v>=1.05,v=>v>=0.97),
+      adv:ratio>=1.05?"離れで左右に大きく開けています（大離れ）。":"離れのあと左右に十分開いていません（小離れ）。会での伸び合いがそのまま左右に開く形を目指しましょう。"});
+    const zl=median(zn.map(f=>f.lean)), dz2=zl-lb;
+    add({grp:"zan",nm:"残心での胴",val:`構えから${sgn(dz2)}${f1(dz2)}°`,ideal:"崩れない（±3°）",t:at(zn),st:grade(dz2,absIn(3),absIn(6)),
+      adv:Math.abs(dz2)<=3?"離れたあとも胴造りが崩れていません。":"離れの反動で上体が傾いています。会での伸び合いを残心まで保ち、離れても縦線を崩さないように。"});
+    const zh=median(zn.map(f=>(f.shMid.y-f.wrMid.y)/Tm));
+    add({grp:"zan",nm:"残心での腕の高さ",val:`両手首が肩より${zh>=0?"上":"下"} ${(Math.abs(zh)*100).toFixed(0)}%`,ideal:"矢筋の高さ（肩付近）",t:at(zn),st:grade(zh,v=>v>=-0.3&&v<=0.4,v=>v>=-0.5&&v<=0.55),
+      adv:(zh>=-0.3&&zh<=0.4)?"矢筋の高さで両腕が保たれています。":zh<-0.3?"残心で腕が下がっています。離れた瞬間に力を抜かず、一呼吸は矢筋の高さで保ちましょう。":"残心で腕が上がっています。離れで腕が跳ねていないか確認しましょう。"});
+  }
+  return M;
+}
+
+/* ==================== 解析の取りまとめ ==================== */
+async function finishAnalysis(raw){
+  const F=preprocess(raw,S.W,S.H,S.fps);
+  const {Sm,Tm}=baseFeatures(F,S.fps);
+  const P=detectPhases(F,S.fps);
+  const sel=$("#optHand").value;
+  const hand= sel==="auto" ? autoHand(F,P) : sel;
+  const {dir}=sideFeatures(F,hand);
+  const style=$("#optStyle").value;
+  const M=computeMetrics(F,P,{Sm,Tm,dir,style,fps:S.fps});
+  S.frames=F; S.res={P,M,hand,dir,Sm,Tm,style};
+  setBusy(false); setProg(0);
+  await renderResults();
+}
+
+const GROUPS = [
+  {k:"ashibumi",name:"足踏み",ph:"kamae",desc:"両足を踏み開き、射の土台を作る"},
+  {k:"dou",name:"胴造り",ph:"kamae",desc:"足踏みの上に上体を正しく据える"},
+  {k:"uchi",name:"打起し",ph:"uchi",desc:"弓矢を水平に保ったまま両拳を上げる"},
+  {k:"hiki",name:"引分け",ph:"hiki",desc:"左右均等に、水平に引き下ろす"},
+  {k:"kai",name:"会",ph:"kai",desc:"引き納めて伸び合い、離れの機を熟させる"},
+  {k:"hanare",name:"離れ",ph:"hanare",desc:"伸び合いの極みで自然に弦が離れる"},
+  {k:"zan",name:"残心",ph:"zan",desc:"離れた後の姿勢をそのまま保つ"},
+];
+
+async function renderResults(){
+  const {P,M}=S.res;
+  $("#results").style.display="block";
+  // スコア
+  const graded=M.filter(m=>STATUS[m.st]&&STATUS[m.st].w!=null);
+  const score=graded.length?Math.round(graded.reduce((s,m)=>s+STATUS[m.st].w,0)/graded.length):0;
+  $("#scoreNum").textContent=graded.length?score:"–";
+  const C=2*Math.PI*52; $("#scoreArc").setAttribute("stroke-dasharray",`${C*score/100} ${C}`);
+  const cnt={good:0,warn:0,bad:0}; graded.forEach(m=>cnt[m.st]++);
+  $("#counts").innerHTML=["bad","warn","good"].map(k=>`${chip(k)}<span class="small" style="margin:0 6px 0 -2px">${cnt[k]}項目</span>`).join("");
+  const top=[...M.filter(m=>m.st==="bad"),...M.filter(m=>m.st==="warn")].slice(0,5);
+  let html="";
+  if(!P.ok) html+=`<li>${chip("na")}<span>射の流れを区切れませんでした（${esc(P.why)}）。足踏み・胴造りのみ判定しています。</span></li>`;
+  html+= top.length? top.map(m=>`<li>${chip(m.st)}<span><b>${GROUPS.find(g=>g.k===m.grp).name}・${esc(m.nm)}</b>　${esc(m.adv.split("。")[0])}。</span></li>`).join("")
+       : `<li>${chip("good")}<span>大きな歪みは見つかりませんでした。</span></li>`;
+  $("#issues").innerHTML=html;
+
+  // 位相の凡例
+  $("#legendPh").innerHTML=PH_ORDER.filter(k=>P.ph&&P.ph[k]).map(k=>`<span><i style="background:var(${PHASES[k].color})"></i>${PHASES[k].name}</span>`).join("");
+
+  // 節ごとのカード
+  $("#phaseCards").innerHTML=GROUPS.map(g=>{
+    const ms=M.filter(m=>m.grp===g.k); if(!ms.length) return "";
+    const worst=ms.some(m=>m.st==="bad")?"bad":ms.some(m=>m.st==="warn")?"warn":"good";
+    return `<section class="card phase-card" style="border-left-color:var(${PHASES[g.ph].color})">
+      <div class="ph-head"><div><h2>${g.name}</h2><div class="small muted">${g.desc}</div></div>${chip(worst)}</div>
+      ${ms.map(m=>`<div class="metric">
+        <div class="nm">${esc(m.nm)}</div><div class="vl">${esc(m.val)}</div>
+        <div class="meta">${chip(m.st)}<span class="id">目安：${esc(m.ideal)}</span>${m.t!=null?`<button class="linkish" data-t="${m.t}">この場面を見る</button>`:""}</div>
+        <div class="adv">${esc(m.adv)}</div></div>`).join("")}
+    </section>`;
+  }).join("");
+  document.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{ seek(+b.dataset.t); $("#stage").scrollIntoView({behavior:"smooth",block:"center"}); });
+
+  // プレイヤー準備
+  const F=S.frames; S.t=F[0].t;
+  const v=$("#mv");
+  $("#again").textContent = S.mode==="cam" ? "遅延映像に戻る" : "別の動画を解析";
+  $("#floatBack").style.display = S.mode==="cam" ? "inline-flex" : "none";
+  if(S.source==="frames"){ v.style.display="none"; $("#tgVideo").parentElement.style.display=""; bmpCache.clear(); }
+  else if(S.source==="demo"){ v.removeAttribute("src"); v.style.display="none"; $("#tgVideo").parentElement.style.display="none"; }
+  else { v.style.display="block"; $("#tgVideo").parentElement.style.display=""; v.playbackRate=+$("#speed").value; }
+  layoutStage(); buildTimeline();
+  charts.D.set(F.map(f=>f.t),F.map(f=>f.D),P,{fmt:v=>v.toFixed(2)});
+  charts.L.set(F.map(f=>f.t),F.map(f=>f.lean),P,{fmt:v=>`${sgn(v)}${f1(v)}°`,zero:true,band:[-2.5,2.5]});
+  await seek(S.t);
+  $("#results").scrollIntoView({behavior:"smooth"});
+  await buildSnaps();
+}
+function chip(st){ const s=STATUS[st]; return `<span class="chip ${st}"><span class="ic">${s.ic}</span>${s.lbl}</span>`; }
+
+/* ==================== プレイヤー ==================== */
+const ov=$("#ov");
+function layoutStage(){
+  const st=$("#stage"); const ar=S.W/S.H;
+  const maxH=Math.min(window.innerHeight*0.68,720);
+  const w=Math.min(st.parentElement.clientWidth, maxH*ar);
+  st.style.width=w+"px"; st.style.height=(w/ar)+"px";
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  ov.width=Math.round(w*dpr); ov.height=Math.round(w/ar*dpr);
+  draw();
+}
+window.addEventListener("resize",()=>{ if(S.res){ layoutStage(); buildTimeline(); charts.D.draw(); charts.L.draw(); } });
+
+function frameAt(t){
+  const F=S.frames; let lo=0,hi=F.length-1;
+  while(hi-lo>1){ const m=(lo+hi)>>1; if(F[m].t<t) lo=m; else hi=m; }
+  return Math.abs(F[lo].t-t)<=Math.abs(F[hi].t-t)?lo:hi;
+}
+function phaseOf(i){ const P=S.res.P; if(!P.ok) return null; for(const k of PH_ORDER){ const p=P.ph[k]; if(p&&i>=p.s&&i<=p.e) return k; } return null; }
+
+function statusColor(st){ return cssv(st==="good"?"--good":st==="warn"?"--warn":"--bad"); }
+
+function drawFrame(ctx,f,W,H,cw,ch,opt){
+  const sx=cw/W, sy=ch/H, X=p=>p.x*sx, Y=p=>p.y*sy;
+  const lw=Math.max(2,cw/320);
+  const ph=opt.phase;
+  ctx.lineCap="round"; ctx.lineJoin="round";
+  const label=(txt,x,y,col)=>{
+    ctx.font=`700 ${Math.max(11,cw/48)}px "Noto Sans JP",sans-serif`;
+    const w=ctx.measureText(txt).width+10, h=Math.max(16,cw/34);
+    x=clamp(x,2,cw-w-2); y=clamp(y,h+2,ch-2);
+    ctx.fillStyle="rgba(0,0,0,.7)"; ctx.beginPath(); ctx.roundRect?ctx.roundRect(x,y-h,w,h,4):ctx.rect(x,y-h,w,h); ctx.fill();
+    ctx.fillStyle=col; ctx.fillText(txt,x+5,y-h*0.28);
+  };
+  const ext=(a,b,k)=>{ const d=sub(b,a); return [{x:a.x-d.x*k,y:a.y-d.y*k},{x:b.x+d.x*k,y:b.y+d.y*k}]; };
+  const line=(a,b,col,w,dash)=>{ ctx.save(); ctx.strokeStyle=col; ctx.lineWidth=w; if(dash) ctx.setLineDash(dash); ctx.beginPath(); ctx.moveTo(X(a),Y(a)); ctx.lineTo(X(b),Y(b)); ctx.stroke(); ctx.restore(); };
+  const outlined=(a,b,col,w,dash)=>{ line(a,b,"rgba(0,0,0,.55)",w+2.5,dash); line(a,b,col,w,dash); };
+
+  if(opt.guide){
+    const inKai = ph==="kai"||ph==="hanare";
+    // 縦線：腰の中心から真上の基準（点線）と実際の背骨
+    const hm=f.hipMid, top={x:hm.x,y:hm.y-f.T*1.7};
+    outlined(hm,top,"rgba(255,255,255,.85)",lw*0.8,[lw*3,lw*3]);
+    const stL=Math.abs(f.lean)<=2.5?"good":Math.abs(f.lean)<=5?"warn":"bad";
+    const sp=sub(f.shMid,hm), spTop={x:hm.x+sp.x*1.7,y:hm.y+sp.y*1.7};
+    outlined(hm,spTop,statusColor(stL),lw*1.3);
+    // 肩線
+    const [s1,s2]=ext(f.kSh,f.oSh,0.35);
+    const stS=Math.abs(f.shTilt)<=3?"good":Math.abs(f.shTilt)<=6?"warn":"bad";
+    outlined(s1,s2,statusColor(stS),lw*1.3);
+    // 腰線
+    const [h1,h2]=ext(f.p[I.lHip],f.p[I.rHip],0.5);
+    const stH=Math.abs(f.hipTilt)<=3?"good":Math.abs(f.hipTilt)<=6?"warn":"bad";
+    outlined(h1,h2,statusColor(stH),lw);
+    // 矢の線（打起し〜会）
+    if(ph==="uchi"||ph==="hiki"||ph==="kai"){
+      const [a1,a2]=ext(f.kWr,f.oWr,0.15);
+      const lim=ph==="kai"?[3,6]:[4,8];
+      const stA=Math.abs(f.arrow)<=lim[0]?"good":Math.abs(f.arrow)<=lim[1]?"warn":"bad";
+      outlined(a1,a2,statusColor(stA),lw*1.1,[lw*4,lw*2]);
+      label(`矢 ${f.arrow>0?"先上がり":"先下がり"} ${f1(f.arrow)}°`,X(a2)-cw*0.14,Y(a2)-lw*3,statusColor(stA));
+    }
+    label(`肩 ${f1(f.shTilt)}°`,X(s1)-cw*0.13,Y(s1)+lw,statusColor(stS));
+    label(`胴 ${sgn(f.lean)}${f1(f.lean)}°`,X(spTop)+lw*3,Y(spTop)+lw*2,statusColor(stL));
+    if(inKai){ label(`押手肘 ${f.elbO.toFixed(0)}°`,X(f.oEl)-cw*0.05,Y(f.oEl)+cw*0.05,"#fff"); }
+  }
+  if(opt.skel){
+    for(const [a,b] of BONES){ const pa=f.p[a],pb=f.p[b]; line(pa,pb,"rgba(0,0,0,.55)",lw+2.5); }
+    for(const [a,b] of BONES){ const pa=f.p[a],pb=f.p[b];
+      const col=(a===11&&b===13)||(a===13&&b===15)||(a===15&&b===19) ? (S.res.hand==="L"?"#ffd38a":"#9fd3ff") : (a===12&&b===14)||(a===14&&b===16)||(a===16&&b===20) ? (S.res.hand==="L"?"#9fd3ff":"#ffd38a") : "#ffffff";
+      line(pa,pb,col,lw); }
+    // 頭
+    const hr=dist(f.p[I.lEar],f.p[I.rEar])*0.62;
+    ctx.save(); ctx.strokeStyle="rgba(0,0,0,.55)"; ctx.lineWidth=lw+2.5; ctx.beginPath(); ctx.ellipse(X(f.p[I.nose]),Y(f.p[I.nose])-hr*sy*0.15,hr*sx,hr*sy*1.15,0,0,Math.PI*2); ctx.stroke();
+    ctx.strokeStyle="#fff"; ctx.lineWidth=lw; ctx.stroke(); ctx.restore();
+    for(const k of [11,12,13,14,15,16,23,24,25,26,27,28]){ const p=f.p[k]; ctx.fillStyle="#fff"; ctx.strokeStyle="rgba(0,0,0,.6)"; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(X(p),Y(p),lw*1.2,0,Math.PI*2); ctx.fill(); ctx.stroke(); }
+  }
+}
+
+function paintDemoBg(ctx,cw,ch){
+  ctx.fillStyle="#23221f"; ctx.fillRect(0,0,cw,ch);
+  ctx.fillStyle="#2e2c28"; ctx.fillRect(0,ch*0.86,cw,ch*0.14);
+  ctx.fillStyle="rgba(255,255,255,.55)"; ctx.font=`700 ${Math.max(12,cw/50)}px "Noto Sans JP",sans-serif`;
+  ctx.fillText(S.res&&S.res.dir>0?"的 →":"← 的",S.res&&S.res.dir>0?cw-cw*0.1:cw*0.03,ch*0.08);
+  ctx.fillText("合成サンプル（実写なし）",cw*0.03,ch*0.97);
+}
+
+function draw(){
+  if(!S.res) return;
+  const ctx=ov.getContext("2d"), cw=ov.width, ch=ov.height;
+  ctx.clearRect(0,0,cw,ch);
+  const i=frameAt(S.t), f=S.frames[i], ph=phaseOf(i);
+  if(S.source==="demo") paintDemoBg(ctx,cw,ch);
+  else if(S.source==="frames"){ const bm=S.show.video?dispBitmap(S.t):null; if(bm) ctx.drawImage(bm,0,0,cw,ch); else { ctx.fillStyle="#1b1a18"; ctx.fillRect(0,0,cw,ch); } }
+  else if(!S.show.video){ ctx.fillStyle="#1b1a18"; ctx.fillRect(0,0,cw,ch); }
+  drawFrame(ctx,f,S.W,S.H,cw,ch,{skel:S.show.skel,guide:S.show.guide,phase:ph});
+  $("#phaseTag").textContent=ph?PHASES[ph].name:"—";
+  $("#timeLbl").textContent=S.t.toFixed(2)+"s";
+  const F=S.frames, t0=F[0].t, t1=F[F.length-1].t;
+  $("#tlHead").style.left=`calc(${((S.t-t0)/(t1-t0)*100).toFixed(3)}% - 1px)`;
+  $("#live").innerHTML=[
+    ["胴の傾き",`${sgn(f.lean)}${f1(f.lean)}°`],["肩線",`${f.shTilt>0?"押手肩↑":"勝手肩↑"} ${f1(f.shTilt)}°`],
+    ["矢（両手首）",`${f.arrow>0?"先上がり":"先下がり"} ${f1(f.arrow)}°`],["押手の肘",`${f.elbO.toFixed(0)}°`],["引き幅",`${f.D.toFixed(2)}`]
+  ].map(([a,b])=>`<div><small>${a}</small><b>${b}</b></div>`).join("");
+  charts.D.head(S.t); charts.L.head(S.t);
+}
+
+async function seek(t){
+  const F=S.frames; S.t=clamp(t,F[0].t,F[F.length-1].t);
+  if(S.source==="video"){ const v=$("#mv"); await seekTo(v,S.t); }
+  draw();
+}
+let raf=0, lastNow=0;
+function play(){
+  if(S.playing) return; S.playing=true; $("#play").textContent="❚❚ 停止";
+  const F=S.frames, t0=F[0].t, t1=F[F.length-1].t;
+  if(S.t>=t1-0.01) S.t=t0;
+  const v=$("#mv");
+  if(S.source==="video"){ v.currentTime=S.t; v.playbackRate=+$("#speed").value; v.play().catch(()=>{}); }
+  lastNow=performance.now();
+  const loop=(now)=>{
+    if(!S.playing) return;
+    if(S.source==="video"){ S.t=v.currentTime; if(S.t>=t1){ v.pause(); S.t=t1; draw(); pause(); return; } }
+    else { S.t+=(now-lastNow)/1000*(+$("#speed").value); lastNow=now; if(S.t>=t1){ S.t=t1; draw(); pause(); return; } }
+    draw(); raf=requestAnimationFrame(loop);
+  };
+  raf=requestAnimationFrame(loop);
+}
+function pause(){ S.playing=false; cancelAnimationFrame(raf); $("#play").textContent="▶ 再生"; const v=$("#mv"); if(!v.paused) v.pause(); }
+$("#play").onclick=()=>S.playing?pause():play();
+$("#stepF").onclick=()=>{ pause(); const i=frameAt(S.t); seek(S.frames[Math.min(S.frames.length-1,i+1)].t); };
+$("#stepB").onclick=()=>{ pause(); const i=frameAt(S.t); seek(S.frames[Math.max(0,i-1)].t); };
+$("#speed").onchange=()=>{ $("#mv").playbackRate=+$("#speed").value; };
+$("#tgSkel").onchange=e=>{S.show.skel=e.target.checked;draw();};
+$("#tgGuide").onchange=e=>{S.show.guide=e.target.checked;draw();};
+$("#tgVideo").onchange=e=>{S.show.video=e.target.checked; $("#mv").style.visibility=e.target.checked?"visible":"hidden"; draw();};
+
+function buildTimeline(){
+  const tl=$("#tl"); tl.querySelectorAll(".seg").forEach(e=>e.remove());
+  const F=S.frames, t0=F[0].t, t1=F[F.length-1].t, P=S.res.P;
+  if(P.ok) for(const k of PH_ORDER){ const p=P.ph[k]; if(!p) continue;
+    const s=document.createElement("div"); s.className="seg";
+    const a=(p.t0-t0)/(t1-t0)*100, b=(Math.min(t1,p.t1+1/S.fps)-t0)/(t1-t0)*100;
+    s.style.left=a+"%"; s.style.width=Math.max(0.4,b-a)+"%";
+    s.style.background=`color-mix(in srgb,var(${PHASES[k].color}) 45%,transparent)`;
+    if(b-a>7) s.innerHTML=`<span>${PHASES[k].name}</span>`; s.title=PHASES[k].name;
+    tl.insertBefore(s,$("#tlHead")); }
+  const toT=e=>{ const r=tl.getBoundingClientRect(); return t0+clamp((e.clientX-r.left)/r.width,0,1)*(t1-t0); };
+  let drag=false;
+  tl.onpointerdown=e=>{ drag=true; tl.setPointerCapture(e.pointerId); pause(); seek(toT(e)); };
+  tl.onpointermove=e=>{ if(drag){ S.t=toT(e); if(S.source==="video") $("#mv").currentTime=S.t; draw(); } };
+  tl.onpointerup=e=>{ drag=false; seek(toT(e)); };
+}
+
+/* ==================== 静止画 ==================== */
+async function buildSnaps(){
+  const P=S.res.P, F=S.frames, box=$("#snaps"); box.innerHTML="";
+  const list=[];
+  if(P.ok){
+    if(P.ph.kamae) list.push(["足踏み・胴造り",F[(P.ph.kamae.s+P.ph.kamae.e)>>1].t]);
+    if(P.hasUchi) list.push(["打起し",F[P.u].t]);
+    list.push(["会",F[Math.max(P.kaiStart,P.kaiEnd-Math.round(S.fps*0.25))].t]);
+    list.push(["離れ",F[Math.min(F.length-1,P.r0+Math.round(S.fps*0.15))].t]);
+    if(P.ph.zan) list.push(["残心",F[(P.ph.zan.s+P.ph.zan.e)>>1].t]);
+  } else list.push(["構え",F[0].t]);
+  const v=$("#mv"), ar=S.W/S.H, cw=Math.round(Math.min(480,S.W)), ch=Math.round(cw/ar);
+  for(const [name,t] of list){
+    const d=document.createElement("div"); d.className="snap";
+    const c=document.createElement("canvas"); c.width=cw; c.height=ch;
+    d.appendChild(c); const l=document.createElement("div"); l.textContent=`${name}（${t.toFixed(1)}s）`; d.appendChild(l);
+    d.onclick=()=>{ pause(); seek(t); $("#stage").scrollIntoView({behavior:"smooth",block:"center"}); };
+    box.appendChild(d);
+    const ctx=c.getContext("2d"), i=frameAt(t);
+    if(S.source==="video"){ await seekTo(v,t); try{ ctx.drawImage(v,0,0,cw,ch); }catch(_){ ctx.fillStyle="#000"; ctx.fillRect(0,0,cw,ch); } }
+    else if(S.source==="frames"){ try{ const bm=await createImageBitmap(S.disp[nearest(S.disp.map(d=>d.t),t)].blob); ctx.drawImage(bm,0,0,cw,ch); bm.close&&bm.close(); }catch(_){ ctx.fillStyle="#000"; ctx.fillRect(0,0,cw,ch); } }
+    else paintDemoBg(ctx,cw,ch);
+    drawFrame(ctx,F[i],S.W,S.H,cw,ch,{skel:true,guide:true,phase:phaseOf(i)});
+  }
+  await seek(S.t);
+}
+
+/* ==================== グラフ ==================== */
+class LineChart{
+  constructor(el){ this.el=el; this.c=el.querySelector("canvas"); this.tip=el.querySelector(".tip"); this.hover=null; this.ht=null;
+    this.c.addEventListener("pointermove",e=>{ this.hover=this.tAt(e); this.draw(); this.showTip(e); });
+    this.c.addEventListener("pointerleave",()=>{ this.hover=null; this.tip.style.display="none"; this.draw(); });
+    this.c.addEventListener("click",e=>{ pause(); seek(this.tAt(e)); });
+  }
+  set(ts,vs,P,o){ this.ts=ts; this.vs=vs; this.P=P; this.o=o; this.draw(); }
+  geom(){ const r=this.c.getBoundingClientRect(); return {w:r.width,h:r.height,L:44,R:10,T:8,B:22}; }
+  tAt(e){ const g=this.geom(), r=this.c.getBoundingClientRect(); const x=e.clientX-r.left; const t0=this.ts[0], t1=this.ts[this.ts.length-1]; return t0+clamp((x-g.L)/(g.w-g.L-g.R),0,1)*(t1-t0); }
+  head(t){ this.ht=t; this.draw(); }
+  draw(){
+    if(!this.ts) return;
+    const g=this.geom(), dpr=Math.min(2,devicePixelRatio||1);
+    if(this.c.width!==Math.round(g.w*dpr)){ this.c.width=Math.round(g.w*dpr); this.c.height=Math.round(g.h*dpr); }
+    const ctx=this.c.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,g.w,g.h);
+    const ts=this.ts, vs=this.vs, t0=ts[0], t1=ts[ts.length-1];
+    let lo=Math.min(...vs), hi=Math.max(...vs);
+    if(this.o.band){ lo=Math.min(lo,this.o.band[0]); hi=Math.max(hi,this.o.band[1]); }
+    if(this.o.zero){ const m=Math.max(Math.abs(lo),Math.abs(hi),4); lo=-m; hi=m; }
+    const pad=(hi-lo)*0.08||1; lo-=pad; hi+=pad;
+    const X=t=>g.L+(t-t0)/(t1-t0||1)*(g.w-g.L-g.R), Y=v=>g.T+(1-(v-lo)/(hi-lo))*(g.h-g.T-g.B);
+    // 位相の帯
+    if(this.P&&this.P.ok) for(const k of PH_ORDER){ const p=this.P.ph[k]; if(!p) continue;
+      ctx.fillStyle=cssv(PHASES[k].color); ctx.globalAlpha=0.13; ctx.fillRect(X(p.t0),g.T,Math.max(1,X(p.t1)-X(p.t0)),g.h-g.T-g.B); ctx.globalAlpha=1; }
+    if(this.o.band){ ctx.fillStyle=cssv("--good"); ctx.globalAlpha=0.09; ctx.fillRect(g.L,Y(this.o.band[1]),g.w-g.L-g.R,Y(this.o.band[0])-Y(this.o.band[1])); ctx.globalAlpha=1; }
+    // 軸・目盛
+    ctx.font='11px "Noto Sans JP",sans-serif'; ctx.fillStyle=cssv("--ink2"); ctx.strokeStyle=cssv("--grid"); ctx.lineWidth=1;
+    const ticks=4; for(let i=0;i<=ticks;i++){ const v=lo+(hi-lo)*i/ticks, y=Y(v); ctx.beginPath(); ctx.moveTo(g.L,y); ctx.lineTo(g.w-g.R,y); ctx.stroke();
+      ctx.textAlign="right"; ctx.fillText(this.o.zero?v.toFixed(0)+"°":v.toFixed(1),g.L-6,y+4); }
+    if(this.o.zero){ ctx.strokeStyle=cssv("--ink3"); ctx.setLineDash([3,3]); ctx.beginPath(); ctx.moveTo(g.L,Y(0)); ctx.lineTo(g.w-g.R,Y(0)); ctx.stroke(); ctx.setLineDash([]); }
+    ctx.textAlign="center"; const step=(t1-t0)>20?5:(t1-t0)>8?2:1;
+    for(let s=Math.ceil(t0/step)*step;s<=t1;s+=step){ ctx.fillText(s+"s",X(s),g.h-6); }
+    // 線
+    ctx.strokeStyle=cssv("--s1"); ctx.lineWidth=2; ctx.lineJoin="round"; ctx.beginPath();
+    ts.forEach((t,i)=>{ const x=X(t),y=Y(vs[i]); i?ctx.lineTo(x,y):ctx.moveTo(x,y); }); ctx.stroke();
+    // 再生位置
+    if(this.ht!=null){ ctx.strokeStyle=cssv("--ink"); ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(X(this.ht),g.T); ctx.lineTo(X(this.ht),g.h-g.B); ctx.stroke(); }
+    if(this.hover!=null){ const i=nearest(ts,this.hover), x=X(ts[i]), y=Y(vs[i]);
+      ctx.strokeStyle=cssv("--ink3"); ctx.lineWidth=1; ctx.setLineDash([2,3]); ctx.beginPath(); ctx.moveTo(x,g.T); ctx.lineTo(x,g.h-g.B); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle=cssv("--s1"); ctx.strokeStyle=cssv("--paper"); ctx.lineWidth=2; ctx.beginPath(); ctx.arc(x,y,4.5,0,Math.PI*2); ctx.fill(); ctx.stroke(); }
+  }
+  showTip(e){ const i=nearest(this.ts,this.hover); const t=this.ts[i]; const ph=phaseOf(frameAt(t));
+    this.tip.innerHTML=`${t.toFixed(2)}s　<b>${this.o.fmt(this.vs[i])}</b>${ph?`<br>${PHASES[ph].name}`:""}`;
+    const r=this.el.getBoundingClientRect(); this.tip.style.display="block";
+    const x=e.clientX-r.left, w=this.tip.offsetWidth; this.tip.style.left=clamp(x+12,0,r.width-w)+"px"; this.tip.style.top="40px"; }
+}
+function nearest(ts,t){ let lo=0,hi=ts.length-1; while(hi-lo>1){const m=(lo+hi)>>1; if(ts[m]<t) lo=m; else hi=m;} return Math.abs(ts[lo]-t)<=Math.abs(ts[hi]-t)?lo:hi; }
+const charts={D:new LineChart($("#chD")),L:new LineChart($("#chL"))};
+
+/* ==================== コピー ==================== */
+$("#copy").onclick=async()=>{
+  const {M,P}=S.res; const lines=[`射形診断　スコア ${$("#scoreNum").textContent}`,""];
+  for(const g of GROUPS){ const ms=M.filter(m=>m.grp===g.k); if(!ms.length) continue; lines.push(`■${g.name}`);
+    ms.forEach(m=>lines.push(`・${m.nm}：${m.val}［${STATUS[m.st].lbl}］${m.st==="good"||m.st==="info"?"":" "+m.adv}`)); lines.push(""); }
+  if(!P.ok) lines.push(`※射の流れを区切れませんでした：${P.why}`);
+  const txt=lines.join("\n");
+  try{ await navigator.clipboard.writeText(txt); $("#copy").textContent="コピーしました"; setTimeout(()=>$("#copy").textContent="結果をテキストでコピー",1800); }
+  catch(_){ const ta=document.createElement("textarea"); ta.value=txt; ta.style.cssText="width:100%;height:200px;margin-top:10px"; $("#copy").parentElement.after(ta); ta.select(); }
+};
+
+/* ==================== 遅延カメラ ==================== */
+S.mode="cam";
+const CAP_FPS=15, CAP_LONG=960;
+const CAM={stream:null, v:null, cc:null, cctx:null, buf:[], pending:0, lastCap:0, raf:0, shownIdx:-1, decoding:false,
+  paused:false, pauseT:0, w:0, h:0, wake:null, busy:false, lastBmp:null};
+const nowS=()=>performance.now()/1000;
+
+function setMode(m){
+  S.mode=m;
+  $("#tabCam").classList.toggle("on",m==="cam"); $("#tabFile").classList.toggle("on",m==="file");
+  $("#camCard").style.display=m==="cam"?"":"none"; $("#inputCard").style.display=m==="file"?"":"none";
+  pause(); $("#results").style.display="none"; $("#floatBack").style.display="none";
+}
+$("#tabCam").onclick=()=>setMode("cam");
+$("#tabFile").onclick=()=>{ setMode("file"); };
+$("#floatBack").onclick=()=>backToInput();
+
+function camErr(m){ const e=$("#camErr"); if(!m){ e.style.display="none"; return; } e.innerHTML=m; e.style.display="block"; }
+function camMsg(big,small){ const el=$("#camMsg"); if(big==null){ el.style.display="none"; return; } el.style.display="flex"; el.innerHTML=`<b>${big}</b>${small?`<span>${small}</span>`:""}`; }
+
+const IN_FRAME=(()=>{ try{ return window.self!==window.top; }catch(_){ return true; } })();
+async function camStart(){
+  camErr(null);
+  if(IN_FRAME){
+    camErr("<b>このページ（Claudeの中のページ）ではカメラは使えません。</b>許可の設定をしても使えない仕組みです。<br>遅延カメラは、GitHub Pages などで公開したページを Safari（または Firefox）で直接開いたときだけ使えます。動画ファイルの診断は、このページでも「動画ファイル」タブから使えます。");
+    return;
+  }
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    camErr(window.isSecureContext===false?"カメラは https:// で公開したページでしか使えません。GitHub Pages などに置いたページを Safari で開いてください。":"このブラウザ（またはこの表示画面）ではカメラを使えません。Safari・Chrome・Firefox で、公開したページを直接開いてください。Claude のページ内ではカメラは使えません。");
+    return;
+  }
+  camStopStream();
+  try{
+    CAM.stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:$("#camFacing").value},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}}});
+  }catch(e){
+    camErr(e&&e.name==="NotAllowedError"?(IS_FIREFOX?"カメラの使用が許可されませんでした。アドレスバー左のカメラ（または鍵）アイコンから、このサイトのカメラを「許可」にして再読み込みしてください。iPhoneのFirefoxでは「設定 → Firefox → カメラ」もオンにしてください。":"カメラの使用が許可されませんでした。Safari の「ぁあ」→ Webサイトの設定 → カメラ を「許可」にしてください。"):"カメラを開始できませんでした（"+esc(e.message||e.name||e)+"）。Claude のページ内ではカメラは使えないため、公開したページをブラウザで直接開いてください。");
+    return;
+  }
+  if(!CAM.v){
+    const v=document.createElement("video"); v.muted=true; v.playsInline=true; v.autoplay=true;
+    v.setAttribute("playsinline",""); v.setAttribute("muted",""); v.setAttribute("autoplay","");
+    v.style.cssText="position:fixed;left:0;bottom:0;width:4px;height:4px;opacity:0.01;pointer-events:none;z-index:-1";
+    document.body.appendChild(v); CAM.v=v;
+    CAM.cc=document.createElement("canvas"); CAM.cctx=CAM.cc.getContext("2d");
+  }
+  CAM.v.srcObject=CAM.stream; try{ await CAM.v.play(); }catch(_){}
+  CAM.buf=[]; CAM.shownIdx=-1; CAM.paused=false; CAM.w=0;
+  $("#camStart").textContent="カメラを再起動"; $("#camStop").style.display="";
+  $("#camDiag").disabled=false; $("#camPause").disabled=false; $("#camPause").textContent="一時停止";
+  $("#camBadge").style.display="";
+  const fsOK=$("#camStage").requestFullscreen||$("#camStage").webkitRequestFullscreen; $("#camFull").style.display=fsOK?"":"none";
+  keepAwake();
+  cancelAnimationFrame(CAM.raf); CAM.raf=requestAnimationFrame(camLoop);
+  // 診断をすぐ始められるよう、モデルを裏で読み込んでおく
+  loadModel($("#camModel").value).catch(e=>console.warn(e));
+}
+function camStopStream(){ if(CAM.stream){ CAM.stream.getTracks().forEach(t=>t.stop()); CAM.stream=null; } }
+function camStop(){
+  camStopStream(); cancelAnimationFrame(CAM.raf); CAM.buf=[]; CAM.lastBmp=null;
+  $("#camStart").textContent="カメラを開始"; $("#camStop").style.display="none"; $("#camDiag").disabled=true; $("#camPause").disabled=true;
+  $("#camBadge").style.display="none"; $("#scrub").style.display="none"; $("#camStat").textContent="";
+  const c=$("#dc"); c.getContext("2d").clearRect(0,0,c.width,c.height);
+  camMsg("遅延カメラ","「カメラを開始」を押してください");
+  if(CAM.wake){ try{CAM.wake.release();}catch(_){} CAM.wake=null; }
+}
+async function keepAwake(){ try{ if("wakeLock" in navigator) CAM.wake=await navigator.wakeLock.request("screen"); }catch(_){} }
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible"&&CAM.stream){ keepAwake();
+  const tr=CAM.stream.getVideoTracks()[0]; if(!tr||tr.readyState==="ended") camStart(); else CAM.v.play().catch(()=>{}); } });
+$("#camStart").onclick=camStart; $("#camStop").onclick=camStop;
+$("#camFacing").onchange=()=>{ if(CAM.stream) camStart(); };
+$("#camModel").onchange=()=>{ if(CAM.stream) loadModel($("#camModel").value).catch(()=>{}); };
+$("#camFull").onclick=()=>{ const el=$("#camStage"); if(document.fullscreenElement||document.webkitFullscreenElement){ (document.exitFullscreen||document.webkitExitFullscreen).call(document); } else { (el.requestFullscreen||el.webkitRequestFullscreen).call(el); } };
+
+function bufIndexAt(t){ const B=CAM.buf; if(!B.length) return -1; if(t<B[0].t) return -1; let lo=0,hi=B.length-1; while(hi>lo){ const m=(lo+hi+1)>>1; if(B[m].t<=t) lo=m; else hi=m-1; } return lo; }
+
+function camCapture(now){
+  const v=CAM.v; if(!v||v.readyState<2||!v.videoWidth) return;
+  if(now-CAM.lastCap < 1/CAP_FPS-0.004 || CAM.pending>=2) return;
+  CAM.lastCap=now;
+  const sc=Math.min(1,CAP_LONG/Math.max(v.videoWidth,v.videoHeight));
+  const w=Math.round(v.videoWidth*sc), h=Math.round(v.videoHeight*sc);
+  if(w!==CAM.w||h!==CAM.h){ CAM.w=w; CAM.h=h; CAM.cc.width=w; CAM.cc.height=h; CAM.buf=[]; CAM.shownIdx=-1; } // 向きが変わったら録り直し
+  CAM.cctx.drawImage(v,0,0,w,h);
+  const t=now; CAM.pending++;
+  CAM.cc.toBlob(b=>{ CAM.pending--; if(b&&b.size>0) CAM.buf.push({t,blob:b,w,h}); },"image/jpeg",0.72);
+  // 古いコマを捨てる
+  const keep=Math.max(+$("#camDelay").value,+$("#camWin").value)+15;
+  while(CAM.buf.length && CAM.buf[0].t<now-keep) CAM.buf.shift();
+}
+function camShow(idx){
+  if(idx<0||CAM.decoding) return; if(idx===CAM.shownIdx) return;
+  const f=CAM.buf[idx]; CAM.decoding=true;
+  createImageBitmap(f.blob).then(bm=>{
+    CAM.decoding=false; CAM.shownIdx=idx;
+    const st=$("#camStage"), c=$("#dc"), dpr=Math.min(2,devicePixelRatio||1);
+    const ar=f.w/f.h, W=st.clientWidth, H=st.clientHeight; let cw=W, ch=W/ar; if(ch>H){ ch=H; cw=H*ar; }
+    if(c.width!==Math.round(cw*dpr)||c.height!==Math.round(ch*dpr)){ c.width=Math.round(cw*dpr); c.height=Math.round(ch*dpr); c.style.width=cw+"px"; c.style.height=ch+"px"; }
+    const ctx=c.getContext("2d"); ctx.save();
+    if($("#camMirror").value==="1"){ ctx.translate(c.width,0); ctx.scale(-1,1); }
+    ctx.drawImage(bm,0,0,c.width,c.height); ctx.restore(); bm.close&&bm.close();
+  }).catch(()=>{ CAM.decoding=false; });
+}
+function camLoop(){
+  if(!CAM.stream) return;
+  const now=nowS(); camCapture(now);
+  const delay=+$("#camDelay").value, B=CAM.buf;
+  const span=B.length?B[B.length-1].t-B[0].t:0;
+  if(CAM.paused){
+    $("#camBadge").textContent=`一時停止中　${Math.max(0,now-CAM.pauseT).toFixed(0)}秒前`; $("#camBadge").className="cam-badge paused";
+    camShow(bufIndexAt(CAM.pauseT));
+  } else {
+    const target=now-delay;
+    if(!B.length||target<B[0].t){ const left=Math.ceil(delay-span); camMsg(String(Math.max(0,left)),"秒後に遅延映像が始まります"); $("#camBadge").textContent=`${delay}秒遅れ`; }
+    else { camMsg(null); camShow(bufIndexAt(target)); $("#camBadge").textContent=`◀ ${delay}秒前の映像`; }
+    $("#camBadge").className="cam-badge";
+  }
+  $("#camStat").textContent=`録画中・${span.toFixed(0)}秒ぶん保持（${CAM.w}×${CAM.h}・${CAP_FPS}コマ/秒）`;
+  CAM.raf=requestAnimationFrame(camLoop);
+}
+$("#camPause").onclick=()=>{
+  if(!CAM.stream) return;
+  CAM.paused=!CAM.paused;
+  const B=CAM.buf;
+  if(CAM.paused){
+    CAM.pauseT=nowS()-(+$("#camDelay").value);
+    if(B.length&&CAM.pauseT<B[0].t) CAM.pauseT=B[0].t;
+    $("#camPause").textContent="遅延表示に戻る";
+    const sc=$("#scrub"), si=$("#scrubIn"); sc.style.display="block";
+    CAM.scrubRange=[B.length?B[0].t:0, B.length?B[B.length-1].t:0];
+    si.value=String((CAM.pauseT-CAM.scrubRange[0])/((CAM.scrubRange[1]-CAM.scrubRange[0])||1));
+  } else { $("#camPause").textContent="一時停止"; $("#scrub").style.display="none"; }
+};
+$("#scrubIn").oninput=e=>{ const [a,b]=CAM.scrubRange||[0,0]; CAM.pauseT=a+(b-a)*(+e.target.value); };
+
+function lastRelease(F,fps){
+  const n=F.length, g2=Math.max(1,Math.round(0.12*fps)), hw=Math.round(0.8*fps); let best=-1;
+  for(let i=g2;i<n-1;i++){
+    const v=F[i].v; if(v<1.2||v<F[i-1].v||v<F[i+1].v) continue;
+    const dA=F[i-g2].D, dB=F[Math.min(n-1,i+g2)].D;
+    if(dA<1.3||dB<dA*0.95) continue;
+    let hold=true; for(let j=Math.max(0,i-hw);j<=i-g2;j++) if(F[j].D<1.3){ hold=false; break; }
+    if(!hold) continue;
+    if(best<0||F[i].t-F[best].t>1.5) best=i; else if(v>F[best].v) best=i;
+  }
+  return best;
+}
+function camProg(p,txt){ const el=$("#camProg"); if(p==null){ el.style.display="none"; return; } el.style.display="block"; $("#camBar").style.width=(p*100).toFixed(1)+"%"; if(txt) $("#camProgText").textContent=txt; }
+
+$("#camDiag").onclick=async()=>{
+  if(CAM.busy||!CAM.buf.length) return;
+  CAM.busy=true; $("#camDiag").disabled=true; camErr(null);
+  try{
+    const now=nowS(), win=+$("#camWin").value, aF=10;
+    const frames=CAM.buf.filter(f=>f.t>=now-win);
+    if(frames.length<CAP_FPS*6) throw new Error("録画がまだ短すぎます（6秒以上必要）。");
+    const W=frames[0].w, H=frames[0].h, t0=frames[0].t, tEnd=frames[frames.length-1].t;
+    camProg(0,"骨格推定モデルを準備中…");
+    await loadModel($("#camModel").value);
+    const ts=frames.map(f=>f.t), raw=[]; let last=-1; const st=performance.now();
+    const steps=Math.floor((tEnd-t0)*aF)+1;
+    for(let k=0;k<steps;k++){
+      const i=nearest(ts,t0+k/aF); if(i===last) continue; last=i;
+      const f=frames[i]; let lm=null;
+      try{ const bm=await createImageBitmap(f.blob); mpTs+=1000/aF+1;
+        lm=await detectPose(bm,Math.round(mpTs)); bm.close&&bm.close(); }catch(e){ console.warn(e); }
+      raw.push({t:f.t-t0,lm});
+      if(k%4===0){ const el=(performance.now()-st)/1000, eta=el/(k+1)*(steps-k-1); camProg((k+1)/steps,`直前${Math.round(tEnd-t0)}秒の射を解析中…（残り約${Math.ceil(eta)}秒）`); await new Promise(r=>setTimeout(r,0)); }
+    }
+    if(raw.filter(r=>r.lm).length<raw.length*0.3) throw new Error("射手を検出できませんでした。全身が映る位置にカメラを置いてください。");
+    camProg(1,"離れを探しています…");
+    const Fp=preprocess(raw,W,H,aF); baseFeatures(Fp,aF);
+    const r=lastRelease(Fp,aF);
+    if(r<0) throw new Error(`直前${win}秒の中に離れが見つかりませんでした。射のあとに押すか、さかのぼる範囲を広げてください。`);
+    const tr=Fp[r].t, a=tr-22, b=tr+3.5;
+    const crop=raw.filter(x=>x.t>=a&&x.t<=b);
+    S.disp=frames.filter(f=>f.t-t0>=a&&f.t-t0<=b).map(f=>({t:f.t-t0,blob:f.blob}));
+    S.source="frames"; S.W=W; S.H=H; S.fps=aF;
+    $("#optHand").value=$("#camHand").value;
+    await finishAnalysis(crop);
+  }catch(e){ console.error(e); camErr(esc(e.message||e)); }
+  finally{ CAM.busy=false; $("#camDiag").disabled=!CAM.stream; camProg(null); }
+};
+
+/* 診断結果の背景に使うコマ（JPEG）の読み出し */
+const bmpCache=new Map(); let bmpPend=new Set(), lastDispBmp=null;
+function dispBitmap(t){
+  const D=S.disp; if(!D||!D.length) return null;
+  const i=nearest(D.map(d=>d.t),t);
+  if(bmpCache.has(i)){ lastDispBmp=bmpCache.get(i); return lastDispBmp; }
+  if(!bmpPend.has(i)){ bmpPend.add(i); createImageBitmap(D[i].blob).then(bm=>{ bmpPend.delete(i); bmpCache.set(i,bm);
+      if(bmpCache.size>45){ const k=bmpCache.keys().next().value; const old=bmpCache.get(k); if(old!==lastDispBmp&&old.close) old.close(); bmpCache.delete(k); }
+      draw(); }).catch(()=>bmpPend.delete(i)); }
+  return lastDispBmp;
+}
+
+/* ==================== 合成サンプル ==================== */
+function makeDemo(){
+  const W=1280,H=720,fps=30,k=165,cx=560,cy=375;
+  const P={
+    kamae:{LE:[0.6,-0.55],LW:[0.27,-0.38],RE:[-0.55,-0.55],RW:[-0.2,-0.38],look:0},
+    uchi:{LE:[0.72,-1.55],LW:[0.3,-1.98],RE:[-0.64,-1.55],RW:[-0.22,-2.0],look:1},
+    daisan:{LE:[1.0,-1.45],LW:[1.22,-1.8],RE:[-0.55,-1.62],RW:[-0.05,-1.95],look:1},
+    kai:{LE:[0.9,-1.15],LW:[1.45,-1.28],RE:[-0.64,-1.13],RW:[-0.06,-1.31],look:1},
+    zan:{LE:[0.93,-1.1],LW:[1.5,-1.2],RE:[-0.86,-1.03],RW:[-1.4,-0.99],look:1},
+  };
+  const keys=[[0,"kamae"],[1.8,"kamae"],[3.6,"uchi"],[4.3,"uchi"],[5.5,"daisan"],[6.1,"daisan"],[8.3,"kai"],[9.5,"kai"],[9.58,"zan"],[11.6,"zan"],[13.2,"kamae"],[14,"kamae"]];
+  const ease=x=>x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;
+  const smooth=(a,b,t)=>{ const x=clamp((t-a)/(b-a),0,1); return x*x*(3-2*x); };
+  let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return (seed/2147483647-0.5); };
+  const frames=[];
+  for(let fi=0; fi<=14*fps; fi++){
+    const t=fi/fps;
+    let j=0; while(j<keys.length-2&&keys[j+1][0]<=t) j++;
+    const [ta,pa]=keys[j], [tb,pb]=keys[j+1];
+    const w=pb==="zan"&&pa==="kai" ? clamp((t-ta)/(tb-ta),0,1) : ease(clamp((t-ta)/(tb-ta),0,1));
+    const A=P[pa],B=P[pb], L=(n)=>[A[n][0]+(B[n][0]-A[n][0])*w, A[n][1]+(B[n][1]-A[n][1])*w];
+    const look=A.look+(B.look-A.look)*w;
+    const fault=smooth(7.3,8.3,t)*(1-smooth(11.6,13,t));
+    const lean=deg2rad(3.6*fault);
+    const shRise=0.075*fault*(1-smooth(9.5,9.7,t)*0.6);
+    const pts={};
+    const set=(i,x,y)=>pts[i]=[x,y];
+    // 下半身
+    set(23,0.18,0); set(24,-0.18,0); set(25,0.5,0.75); set(26,-0.5,0.75); set(27,0.84,1.5); set(28,-0.84,1.5);
+    set(29,0.8,1.56); set(30,-0.8,1.56); set(31,0.97,1.6); set(32,-0.97,1.6);
+    // 上半身
+    set(11,0.34,-1-shRise); set(12,-0.34,-1);
+    const le=L("LE"), lw=L("LW"), re=L("RE"), rw=L("RW");
+    set(13,le[0],le[1]-shRise*0.6); set(15,lw[0],lw[1]-shRise*0.3); set(14,re[0],re[1]); set(16,rw[0],rw[1]);
+    set(19,lw[0]+0.05,lw[1]-0.04); set(17,lw[0]+0.05,lw[1]+0.02); set(21,lw[0]+0.03,lw[1]-0.06);
+    set(20,rw[0]+0.05,rw[1]-0.03); set(18,rw[0]+0.05,rw[1]+0.03); set(22,rw[0]+0.03,rw[1]-0.06);
+    const nx=0.02+0.11*look;
+    set(0,nx,-1.5); set(1,nx+0.04,-1.56); set(2,nx+0.07,-1.56); set(3,nx+0.1,-1.56); set(4,nx-0.04,-1.56); set(5,nx-0.07,-1.56); set(6,nx-0.1,-1.56);
+    set(7,nx+0.15-0.08*look,-1.52); set(8,nx-0.19+0.02*look,-1.52); set(9,nx+0.045,-1.4); set(10,nx-0.045,-1.4);
+    const upper=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22];
+    const lm=[];
+    for(let i=0;i<33;i++){
+      let [x,y]=pts[i];
+      if(upper.includes(i)){ const c=Math.cos(lean), s=Math.sin(lean); [x,y]=[x*c-y*s, x*s+y*c]; }
+      const px=cx+x*k+rnd()*1.6, py=cy+y*k+rnd()*1.6;
+      lm.push({x:px/W,y:py/H,v:0.98});
+    }
+    frames.push({t,lm});
+  }
+  return {W,H,fps,frames};
+}
+function deg2rad(d){ return d*Math.PI/180; }
+// 埋め込み表示（Claudeのページなど）ではカメラが使えないので、動画ファイルの画面から始める
+try{ if(window.self!==window.top) setMode("file"); }catch(_){ setMode("file"); }
+</script>
+</body>
+</html>

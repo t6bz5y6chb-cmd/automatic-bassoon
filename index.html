@@ -580,11 +580,20 @@ function seekTo(v,t){
   });
 }
 
+/* 裏に回ったとき：iPhoneのブラウザは裏ではページを止めるので、一時停止して戻ったら続きから再開する */
+let visGen=0;
+document.addEventListener("visibilitychange",()=>{ if(document.hidden) visGen++; else if(Busy.on) busyLock(); });
+function waitVisible(){ return !document.hidden?Promise.resolve():new Promise(r=>{ const h=()=>{ if(!document.hidden){ document.removeEventListener("visibilitychange",h); setTimeout(r,400); } }; document.addEventListener("visibilitychange",h); }); }
+const Busy={on:false,lock:null,title:document.title};
+async function busyLock(){ try{ if("wakeLock" in navigator && !Busy.lock){ Busy.lock=await navigator.wakeLock.request("screen"); Busy.lock.addEventListener&&Busy.lock.addEventListener("release",()=>{Busy.lock=null;}); } }catch(_){} }
+async function withBusy(fn){ Busy.on=true; busyLock(); try{ return await fn(); } finally{ Busy.on=false; try{ Busy.lock&&Busy.lock.release(); }catch(_){} Busy.lock=null; document.title=Busy.title; } }
+function busyTitle(p){ document.title=`解析中 ${Math.round(p*100)}%｜射形診断`; }
 function isBlank(ctx,w,h){
   try{ const d=ctx.getImageData(0,0,w,h).data; const step=Math.max(4,Math.floor(d.length/4/400)*4);
     let mx=0; for(let i=0;i<d.length;i+=step) mx=Math.max(mx,d[i],d[i+1],d[i+2]); return mx<8; }catch(_){ return false; }
 }
-async function runVideo(av){
+async function runVideo(av){ return withBusy(()=>runVideoInner(av)); }
+async function runVideoInner(av){
   hideErr(); S.cancel=false; setBusy(true,"動画を準備中…");
   const q=$("#optModel").value, fps=+$("#optFps").value;
   try{ await waitMeta(av,30000); }
@@ -603,6 +612,12 @@ async function runVideo(av){
   const raw=[]; const st=performance.now(); let blankCount=0;
   for(let i=0;i<n;i++){
     if(S.cancel){ setBusy(false); setProg(0); return; }
+    if(document.hidden){
+      setProg(i/n,"一時停止中：この画面に戻ると、続きから自動で再開します");
+      await waitVisible(); busyLock();
+      try{ await av.play(); av.pause(); }catch(_){}
+    }
+    const g=visGen;
     const t=Math.min(t1,t0+i/fps);
     await seekTo(av,t);
     pctx.drawImage(av,0,0,pc.width,pc.height);
@@ -615,8 +630,9 @@ async function runVideo(av){
     mpTs += 1000/fps + 1;
     let lm=null;
     lm=await detectPose(pc,Math.round(mpTs));
+    if(g!==visGen){ i--; continue; } // 途中で裏に回ったコマは取り直す
     raw.push({t,lm});
-    if(i%3===0){ const el=(performance.now()-st)/1000, eta=el/(i+1)*(n-i-1); setProg((i+1)/n,`骨格を推定中… ${i+1}/${n}コマ（残り約${Math.ceil(eta)}秒）`); await new Promise(r=>setTimeout(r,0)); }
+    if(i%3===0){ const el=(performance.now()-st)/1000, eta=el/(i+1)*(n-i-1); busyTitle((i+1)/n); setProg((i+1)/n,`骨格を推定中… ${i+1}/${n}コマ（残り約${Math.ceil(eta)}秒）・ほかのアプリに切り替えると一時停止し、戻ると続きから再開します`); await new Promise(r=>setTimeout(r,0)); }
   }
   const ok=raw.filter(r=>r.lm).length;
   if(ok<n*0.4){ setBusy(false);
@@ -1374,7 +1390,8 @@ function lastRelease(F,fps){
 }
 function camProg(p,txt){ const el=$("#camProg"); if(p==null){ el.style.display="none"; return; } el.style.display="block"; $("#camBar").style.width=(p*100).toFixed(1)+"%"; if(txt) $("#camProgText").textContent=txt; }
 
-$("#camDiag").onclick=async()=>{
+$("#camDiag").onclick=()=>withBusy(camDiagnose);
+async function camDiagnose(){
   if(CAM.busy||!CAM.buf.length) return;
   CAM.busy=true; $("#camDiag").disabled=true; camErr(null);
   try{
@@ -1387,12 +1404,15 @@ $("#camDiag").onclick=async()=>{
     const ts=frames.map(f=>f.t), raw=[]; let last=-1; const st=performance.now();
     const steps=Math.floor((tEnd-t0)*aF)+1;
     for(let k=0;k<steps;k++){
-      const i=nearest(ts,t0+k/aF); if(i===last) continue; last=i;
+      if(document.hidden){ camProg(k/steps,"一時停止中：この画面に戻ると、続きから自動で再開します"); await waitVisible(); busyLock(); }
+      const g=visGen;
+      const i=nearest(ts,t0+k/aF); if(i===last) continue;
       const f=frames[i]; let lm=null;
       try{ const bm=await createImageBitmap(f.blob); mpTs+=1000/aF+1;
         lm=await detectPose(bm,Math.round(mpTs)); bm.close&&bm.close(); }catch(e){ console.warn(e); }
-      raw.push({t:f.t-t0,lm});
-      if(k%4===0){ const el=(performance.now()-st)/1000, eta=el/(k+1)*(steps-k-1); camProg((k+1)/steps,`直前${Math.round(tEnd-t0)}秒の射を解析中…（残り約${Math.ceil(eta)}秒）`); await new Promise(r=>setTimeout(r,0)); }
+      if(g!==visGen){ k--; continue; }
+      last=i; raw.push({t:f.t-t0,lm});
+      if(k%4===0){ const el=(performance.now()-st)/1000, eta=el/(k+1)*(steps-k-1); busyTitle((k+1)/steps); camProg((k+1)/steps,`直前${Math.round(tEnd-t0)}秒の射を解析中…（残り約${Math.ceil(eta)}秒）`); await new Promise(r=>setTimeout(r,0)); }
     }
     if(raw.filter(r=>r.lm).length<raw.length*0.3) throw new Error("射手を検出できませんでした。全身が映る位置にカメラを置いてください。");
     camProg(1,"離れを探しています…");
@@ -1407,7 +1427,7 @@ $("#camDiag").onclick=async()=>{
     await finishAnalysis(crop);
   }catch(e){ console.error(e); camErr(esc(e.message||e)); }
   finally{ CAM.busy=false; $("#camDiag").disabled=!CAM.stream; camProg(null); }
-};
+}
 
 /* 診断結果の背景に使うコマ（JPEG）の読み出し */
 const bmpCache=new Map(); let bmpPend=new Set(), lastDispBmp=null;

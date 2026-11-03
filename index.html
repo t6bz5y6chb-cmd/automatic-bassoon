@@ -49,9 +49,24 @@ h3{font-size:15px;margin:0;font-weight:700}
 .btn.ghost{background:transparent}
 .btn.sm{padding:5px 12px;min-height:32px;font-size:13px}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.drop{border:1.5px dashed var(--ink3);border-radius:12px;padding:22px 14px;text-align:center;cursor:pointer;transition:background .15s}
+.drop{display:flex;flex-direction:column;align-items:center;gap:6px;border:1.5px dashed var(--ink3);border-radius:14px;padding:26px 16px;text-align:center;cursor:pointer;transition:background .15s;background:var(--bg)}
+.drop svg{width:34px;height:34px;color:var(--accent)}
+.drop strong{font-size:16px}
+.drop .muted{line-height:1.6;max-width:30em}
+.cta{width:100%;justify-content:center;min-height:50px;font-size:16px;font-weight:700}
+details.opts{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+details.opts>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:700;color:var(--ink2);padding:4px 0}
+details.opts>summary::-webkit-details-marker{display:none}
+details.opts>summary::after{content:"";width:8px;height:8px;border-right:2px solid var(--ink3);border-bottom:2px solid var(--ink3);transform:rotate(45deg);margin-right:6px;transition:transform .15s}
+details.opts[open]>summary::after{transform:rotate(-135deg)}
+details.opts .settings{margin:10px 0 4px}
+.mainrow{display:flex;gap:10px;align-items:stretch;margin-top:12px}
+.mainrow .btn.primary{flex:1;justify-content:center;min-height:50px;font-size:16px;font-weight:700}
+.mainrow select{min-height:50px;font-weight:700;flex:none;width:auto;min-width:8.2em;padding-right:8px}
+.substat{font-size:12.5px;color:var(--ink2);margin-top:6px;min-height:1.2em}
+.foot-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
 .drop:hover,.drop.over{background:rgba(168,56,42,.05);border-color:var(--accent)}
-.drop strong{display:block;font-size:16px;margin-bottom:2px}
+
 .settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:16px 0}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink2)}
 select,input[type=number]{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:38px}
@@ -134,7 +149,7 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
 .tabs{display:flex;gap:6px;background:var(--grid);padding:4px;border-radius:999px;margin-bottom:16px;width:max-content;max-width:100%}
 .tabs button{appearance:none;border:0;background:transparent;font:inherit;font-size:14px;font-weight:700;color:var(--ink2);padding:8px 16px;border-radius:999px;cursor:pointer}
 .tabs button.on{background:var(--paper);color:var(--ink);box-shadow:var(--shadow)}
-.camstage{position:relative;background:#000;border-radius:12px;overflow:hidden;width:100%;height:min(72vh,760px);display:flex;align-items:center;justify-content:center}
+.camstage{position:relative;background:#000;border-radius:12px;overflow:hidden;width:100%;height:min(64vh,760px);transition:height .2s;display:flex;align-items:center;justify-content:center}
 .camstage:fullscreen{height:100vh;border-radius:0}
 .camstage:-webkit-full-screen{height:100vh;width:100vw;border-radius:0}
 .camstage canvas{display:block;max-width:100%;max-height:100%}
@@ -142,6 +157,8 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
 .cam-msg b{font-family:"Shippori Mincho",serif;font-size:clamp(28px,7vw,64px);line-height:1.1}
 .cam-badge{position:absolute;left:12px;top:12px;background:rgba(0,0,0,.6);color:#fff;font-weight:700;font-size:clamp(13px,2.2vw,20px);padding:4px 12px;border-radius:99px;pointer-events:none}
 .cam-badge.paused{background:var(--accent)}
+.camstage.idle{height:min(34vh,320px)}
+.camstage.idle .cam-over,.camstage.idle .cam-badge{display:none!important}
 .cam-over{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .cam-over .btn{background:rgba(0,0,0,.6);color:#fff;border-color:rgba(255,255,255,.35);font-size:clamp(14px,2.2vw,20px);min-height:clamp(40px,6vw,60px);padding:8px clamp(14px,2.4vw,24px)}
 .cam-over .btn.primary{background:var(--accent);border-color:var(--accent)}
@@ -178,10 +195,10 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
 
   <!-- 遅延カメラ -->
   <section class="card" id="camCard">
-    <div class="camstage" id="camStage">
+    <div class="camstage idle" id="camStage">
       <canvas id="dc"></canvas>
       <div class="cam-badge" id="camBadge" style="display:none"></div>
-      <div class="cam-msg" id="camMsg"><b>遅延カメラ</b><span>射手の正面に三脚で置き、「カメラを開始」を押してください</span></div>
+      <div class="cam-msg" id="camMsg"><b>遅延カメラ</b><span>射手の正面に三脚で置き<br>下の「カメラを開始」を押してください</span></div>
       <div class="scrub" id="scrub"><input type="range" id="scrubIn" min="0" max="1" step="0.01" value="1" aria-label="巻き戻し"></div>
       <div class="cam-over">
         <button class="btn" id="camFull" style="display:none">全画面</button>
@@ -190,15 +207,15 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
       </div>
       <div class="cam-prog" id="camProg"><span id="camProgText">解析中…</span><div class="bar"><i id="camBar"></i></div></div>
     </div>
-    <div class="row" style="margin-top:12px">
+    <div class="mainrow">
       <button class="btn primary" id="camStart">カメラを開始</button>
-      <button class="btn ghost" id="camStop" style="display:none">カメラを止める</button>
-      <span class="small muted" id="camStat"></span>
+      <button class="btn" id="camStop" style="display:none;flex:1;justify-content:center;min-height:50px;font-weight:700">カメラを止める</button>
+      <select id="camDelay" aria-label="遅延時間"><option value="5">5秒遅れ</option><option value="10">10秒遅れ</option><option value="15">15秒遅れ</option><option value="20" selected>20秒遅れ</option><option value="30">30秒遅れ</option><option value="45">45秒遅れ</option><option value="60">60秒遅れ</option></select>
     </div>
+    <div class="substat" id="camStat"></div>
+    <details class="opts">
+      <summary>詳しい設定</summary>
     <div class="settings">
-      <label class="f">遅延時間
-        <select id="camDelay"><option value="5">5秒</option><option value="10">10秒</option><option value="15">15秒</option><option value="20" selected>20秒</option><option value="30">30秒</option><option value="45">45秒</option><option value="60">60秒</option></select>
-      </label>
       <label class="f">カメラ
         <select id="camFacing"><option value="environment">背面カメラ</option><option value="user">前面カメラ</option></select>
       </label>
@@ -215,6 +232,7 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
         <select id="camModel"><option value="full" selected>標準（高精度）</option><option value="lite">軽量（iPhone・古いiPad向け）</option></select>
       </label>
     </div>
+    </details>
     <div class="err" id="camErr"></div>
     <details class="tips">
       <summary>使い方と置き方</summary>
@@ -233,8 +251,9 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
     <h2>動画を読み込む</h2>
     <label class="drop" id="drop">
       <input type="file" id="file" accept="video/*,video/quicktime,video/mp4,.mov,.MOV,.mp4,.m4v" hidden>
-      <strong>射の動画を選択</strong>
-      <span class="muted small">iPhoneの写真アプリの動画（MOV・HEVC）もそのまま選べます。正面から全身が映った1射分</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10.5l5-3v9l-5-3"/></svg>
+      <strong>射の動画を選ぶ</strong>
+      <span class="muted small">写真アプリの動画をそのまま選べます<br>正面から全身が映った1射分</span>
     </label>
 
     <div class="preview" id="preview">
@@ -249,7 +268,17 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
       </div>
     </div>
 
-    <div class="settings">
+    <div class="mainrow"><button class="btn primary" id="run" disabled>解析を開始</button></div>
+
+    <div class="progress" id="progress">
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="row small muted"><span id="progText">準備中…</span><button class="btn sm ghost" id="cancel">中止</button></div>
+    </div>
+    <div class="err" id="err"></div>
+
+    <details class="opts">
+      <summary>詳しい設定</summary>
+      <div class="settings">
       <label class="f">押手（弓手）
         <select id="optHand"><option value="auto">自動判定</option><option value="L">左手（右射）</option><option value="R">右手（左射）</option></select>
       </label>
@@ -264,16 +293,11 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
       </label>
     </div>
 
-    <div class="row">
-      <button class="btn primary" id="run" disabled>解析を開始</button>
-      <button class="btn" id="demo">合成サンプルで試す</button>
-    </div>
+    </details>
 
-    <div class="progress" id="progress">
-      <div class="bar"><i id="barFill"></i></div>
-      <div class="row small muted"><span id="progText">準備中…</span><button class="btn sm ghost" id="cancel">中止</button></div>
+    <div class="foot-row">
+      <button class="btn sm ghost" id="demo">合成サンプルで試す</button>
     </div>
-    <div class="err" id="err"></div>
 
     <details class="tips">
       <summary>うまく解析するための撮り方</summary>
@@ -1247,9 +1271,9 @@ async function camStart(){
   }
   CAM.v.srcObject=CAM.stream; try{ await CAM.v.play(); }catch(_){}
   CAM.buf=[]; CAM.shownIdx=-1; CAM.paused=false; CAM.w=0;
-  $("#camStart").textContent="カメラを再起動"; $("#camStop").style.display="";
+  $("#camStart").style.display="none"; $("#camStop").style.display="inline-flex";
   $("#camDiag").disabled=false; $("#camPause").disabled=false; $("#camPause").textContent="一時停止";
-  $("#camBadge").style.display="";
+  $("#camBadge").style.display=""; $("#camStage").classList.remove("idle");
   const fsOK=$("#camStage").requestFullscreen||$("#camStage").webkitRequestFullscreen; $("#camFull").style.display=fsOK?"":"none";
   keepAwake();
   cancelAnimationFrame(CAM.raf); CAM.raf=requestAnimationFrame(camLoop);
@@ -1259,8 +1283,8 @@ async function camStart(){
 function camStopStream(){ if(CAM.stream){ CAM.stream.getTracks().forEach(t=>t.stop()); CAM.stream=null; } }
 function camStop(){
   camStopStream(); cancelAnimationFrame(CAM.raf); CAM.buf=[]; CAM.lastBmp=null;
-  $("#camStart").textContent="カメラを開始"; $("#camStop").style.display="none"; $("#camDiag").disabled=true; $("#camPause").disabled=true;
-  $("#camBadge").style.display="none"; $("#scrub").style.display="none"; $("#camStat").textContent="";
+  $("#camStart").style.display=""; $("#camStop").style.display="none"; $("#camStage").style.height=""; $("#camDiag").disabled=true; $("#camPause").disabled=true;
+  $("#camBadge").style.display="none"; $("#scrub").style.display="none"; $("#camStat").textContent=""; $("#camStage").classList.add("idle");
   const c=$("#dc"); c.getContext("2d").clearRect(0,0,c.width,c.height);
   camMsg("遅延カメラ","「カメラを開始」を押してください");
   if(CAM.wake){ try{CAM.wake.release();}catch(_){} CAM.wake=null; }
@@ -1295,7 +1319,9 @@ function camShow(idx){
   createImageBitmap(f.blob).then(bm=>{
     CAM.decoding=false; CAM.shownIdx=idx;
     const st=$("#camStage"), c=$("#dc"), dpr=Math.min(2,devicePixelRatio||1);
-    const ar=f.w/f.h, W=st.clientWidth, H=st.clientHeight; let cw=W, ch=W/ar; if(ch>H){ ch=H; cw=H*ar; }
+    const ar=f.w/f.h;
+    if(!(document.fullscreenElement||document.webkitFullscreenElement)){ const want=Math.round(Math.min(window.innerHeight*0.7,760,st.clientWidth/ar)); if(Math.abs(st.clientHeight-want)>2) st.style.height=want+"px"; }
+    const W=st.clientWidth, H=st.clientHeight; let cw=W, ch=W/ar; if(ch>H){ ch=H; cw=H*ar; }
     if(c.width!==Math.round(cw*dpr)||c.height!==Math.round(ch*dpr)){ c.width=Math.round(cw*dpr); c.height=Math.round(ch*dpr); c.style.width=cw+"px"; c.style.height=ch+"px"; }
     const ctx=c.getContext("2d"); ctx.save();
     if($("#camMirror").value==="1"){ ctx.translate(c.width,0); ctx.scale(-1,1); }

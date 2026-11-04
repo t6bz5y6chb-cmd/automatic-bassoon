@@ -159,6 +159,11 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
 .cam-badge.paused{background:var(--accent)}
 .camstage.idle{height:min(34vh,320px)}
 .camstage.idle .cam-over,.camstage.idle .cam-badge{display:none!important}
+.cam-livebox{position:absolute;right:10px;top:10px;width:24%;max-width:180px;border-radius:8px;overflow:hidden;border:2px solid rgba(255,255,255,.7);background:#000;z-index:2}
+.cam-livebox video{display:block;width:100%;height:auto}
+.cam-livebox span{position:absolute;left:4px;top:3px;font-size:11px;font-weight:700;color:#fff;background:rgba(208,59,59,.9);padding:0 6px;border-radius:99px}
+.camstage.idle .cam-livebox{display:none}
+@media(max-width:520px){.cam-over{left:8px;right:8px;bottom:8px;justify-content:space-between;gap:6px;flex-wrap:nowrap}.cam-over .btn{min-height:38px;padding:6px 10px;font-size:13px;white-space:nowrap;flex:none}.cam-over .btn.primary{flex:1 1 auto;min-width:0;justify-content:center}}
 .cam-over{position:absolute;right:12px;bottom:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .cam-over .btn{background:rgba(0,0,0,.6);color:#fff;border-color:rgba(255,255,255,.35);font-size:clamp(14px,2.2vw,20px);min-height:clamp(40px,6vw,60px);padding:8px clamp(14px,2.4vw,24px)}
 .cam-over .btn.primary{background:var(--accent);border-color:var(--accent)}
@@ -239,6 +244,7 @@ textarea.note-in{width:100%;min-height:64px;font:inherit;font-size:14px;color:va
     <div class="camstage idle" id="camStage">
       <canvas id="dc"></canvas>
       <div class="cam-badge" id="camBadge" style="display:none"></div>
+      <div class="cam-livebox" id="camLive"><span>いま</span></div>
       <div class="cam-msg" id="camMsg"><b>遅延カメラ</b><span>射手の正面に三脚で置き<br>下の「カメラを開始」を押してください</span></div>
       <div class="scrub" id="scrub"><input type="range" id="scrubIn" min="0" max="1" step="0.01" value="1" aria-label="巻き戻し"></div>
       <div class="cam-over">
@@ -542,9 +548,9 @@ function getAV(){
     v=document.createElement("video"); v.id="av";
     v.muted=true; v.defaultMuted=true; v.playsInline=true; v.preload="auto";
     v.setAttribute("muted",""); v.setAttribute("playsinline",""); v.setAttribute("webkit-playsinline","");
-    // display:none だとiPhoneでコマが描画されないので、画面隅に極小で置く
-    v.style.cssText="position:fixed;left:0;bottom:0;width:4px;height:4px;opacity:0.01;pointer-events:none;z-index:-1";
-    document.body.appendChild(v);
+    // iPhoneは見えない動画のコマを描かないことがあるので、進み具合の横に小さく表示しておく
+    v.style.cssText="width:96px;max-height:120px;border-radius:6px;background:#000;display:block;margin-top:8px";
+    $("#progress").prepend(v);
   }
   return v;
 }
@@ -1280,7 +1286,7 @@ async function buildSnaps(){
     box.appendChild(d);
     const ctx=c.getContext("2d"), i=frameAt(t);
     if(S.source==="video"){ await seekTo(v,t); try{ ctx.drawImage(v,0,0,cw,ch); }catch(_){ ctx.fillStyle="#000"; ctx.fillRect(0,0,cw,ch); } }
-    else if(S.source==="frames"){ try{ const bm=await createImageBitmap(S.disp[nearest(S.disp.map(d=>d.t),t)].blob); ctx.drawImage(bm,0,0,cw,ch); bm.close&&bm.close(); }catch(_){ ctx.fillStyle="#000"; ctx.fillRect(0,0,cw,ch); } }
+    else if(S.source==="frames"){ try{ const bm=await decodeBlob(S.disp[nearest(S.disp.map(d=>d.t),t)].blob); ctx.drawImage(bm,0,0,cw,ch); bm.close&&bm.close(); }catch(_){ ctx.fillStyle="#000"; ctx.fillRect(0,0,cw,ch); } }
     else paintDemoBg(ctx,cw,ch);
     drawFrame(ctx,F[i],S.W,S.H,cw,ch,{skel:true,guide:true,phase:phaseOf(i)});
   }
@@ -1348,6 +1354,14 @@ $("#copy").onclick=async()=>{
   catch(_){ const ta=document.createElement("textarea"); ta.value=txt; ta.style.cssText="width:100%;height:200px;margin-top:10px"; $("#copy").parentElement.after(ta); ta.select(); }
 };
 
+/* JPEGのBlobを描ける形にする（createImageBitmapが使えない端末ではImageで代用） */
+let IB_OK=typeof createImageBitmap==="function";
+async function decodeBlob(blob){
+  if(IB_OK){ try{ return await createImageBitmap(blob); }catch(e){ console.warn("createImageBitmap不可→Imageで代用",e); IB_OK=false; } }
+  const url=URL.createObjectURL(blob);
+  try{ const img=new Image(); img.decoding="async"; img.src=url; await (img.decode?img.decode():new Promise((r,j)=>{img.onload=r;img.onerror=j;})); img.close=()=>{}; return img; }
+  finally{ setTimeout(()=>URL.revokeObjectURL(url),1000); }
+}
 /* ==================== 遅延カメラ ==================== */
 S.mode="cam";
 const CAP_FPS=15, CAP_LONG=960;
@@ -1390,13 +1404,14 @@ async function camStart(){
     return;
   }
   if(!CAM.v){
-    const v=document.createElement("video"); v.muted=true; v.playsInline=true; v.autoplay=true;
-    v.setAttribute("playsinline",""); v.setAttribute("muted",""); v.setAttribute("autoplay","");
-    v.style.cssText="position:fixed;left:0;bottom:0;width:4px;height:4px;opacity:0.01;pointer-events:none;z-index:-1";
-    document.body.appendChild(v); CAM.v=v;
+    // iPhoneは見えない動画を止めたり真っ黒にしたりするので、画面の隅に小さく「いまの映像」として表示しておく
+    const v=document.createElement("video"); v.muted=true; v.defaultMuted=true; v.playsInline=true;
+    v.setAttribute("playsinline",""); v.setAttribute("webkit-playsinline",""); v.setAttribute("muted","");
+    v.className="cam-live"; $("#camLive").prepend(v); CAM.v=v;
     CAM.cc=document.createElement("canvas"); CAM.cctx=CAM.cc.getContext("2d");
   }
-  CAM.v.srcObject=CAM.stream; try{ await CAM.v.play(); }catch(_){}
+  CAM.v.srcObject=CAM.stream; try{ await CAM.v.play(); }catch(e){ console.warn("play",e); }
+  CAM.startedAt=nowS(); CAM.warned=false;
   CAM.buf=[]; CAM.shownIdx=-1; CAM.paused=false; CAM.w=0;
   $("#camStart").style.display="none"; $("#camStop").style.display="inline-flex";
   $("#camDiag").disabled=false; $("#camPause").disabled=false; $("#camSave").disabled=false; $("#camPause").textContent="一時停止";
@@ -1443,7 +1458,7 @@ function camCapture(now){
 function camShow(idx){
   if(idx<0||CAM.decoding) return; if(idx===CAM.shownIdx) return;
   const f=CAM.buf[idx]; CAM.decoding=true;
-  createImageBitmap(f.blob).then(bm=>{
+  decodeBlob(f.blob).then(bm=>{
     CAM.decoding=false; CAM.shownIdx=idx;
     const st=$("#camStage"), c=$("#dc"), dpr=Math.min(2,devicePixelRatio||1);
     const ar=f.w/f.h;
@@ -1470,6 +1485,12 @@ function camLoop(){
     $("#camBadge").className="cam-badge";
   }
   $("#camStat").textContent=`録画中・${span.toFixed(0)}秒ぶん保持（${CAM.w}×${CAM.h}・${CAP_FPS}コマ/秒）`;
+  if(!CAM.warned && now-CAM.startedAt>4 && B.length<3){
+    CAM.warned=true; const v=CAM.v;
+    camErr(`カメラの映像を取り込めていません（状態 ${v?v.readyState:"-"}・${v?v.videoWidth+"×"+v.videoHeight:"-"}・保存 ${B.length}コマ）。「カメラを止める」→「カメラを開始」をもう一度押してください。直らない場合はこの表示をそのまま教えてください。`);
+    if(v&&v.paused) v.play().catch(()=>{});
+  }
+  if(CAM.warned && B.length>=CAP_FPS){ CAM.warned=false; CAM.startedAt=Infinity; camErr(null); }
   CAM.raf=requestAnimationFrame(camLoop);
 }
 $("#camPause").onclick=()=>{
@@ -1514,7 +1535,7 @@ async function diagnoseFrames(frames,W,H,label,prog){
     const g=visGen;
     const i=nearest(ts,t0+k/aF); if(i===last) continue;
     const f=frames[i]; let lm=null;
-    try{ const bm=await createImageBitmap(f.blob); mpTs+=1000/aF+1;
+    try{ const bm=await decodeBlob(f.blob); mpTs+=1000/aF+1;
       lm=await detectPose(bm,Math.round(mpTs)); bm.close&&bm.close(); }catch(e){ console.warn(e); }
     if(g!==visGen){ k--; continue; }
     last=i; raw.push({t:f.t-t0,lm});
@@ -1571,7 +1592,7 @@ function recDB(){
 }
 async function idb(store,mode,op){ const db=await recDB(); return new Promise((res,rej)=>{ const t=db.transaction(store,mode); const r=op(t.objectStore(store)); t.oncomplete=()=>res(r?r.result:undefined); t.onerror=t.onabort=()=>rej(t.error||new Error("IDB error")); }); }
 async function makeThumb(blob){
-  const bm=await createImageBitmap(blob); const w=240, h=Math.round(bm.height*w/bm.width);
+  const bm=await decodeBlob(blob); const w=240, h=Math.round(bm.height*w/bm.width);
   const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bm,0,0,w,h); bm.close&&bm.close();
   return new Promise(r=>c.toBlob(b=>r(b),"image/jpeg",0.7));
 }
@@ -1638,7 +1659,7 @@ async function openRecord(id){
 function rvIdx(t){ return nearest(RV.frames.map(f=>f.t),t); }
 function rvDraw(){
   if(!RV.frames||RV.decoding) return; const i=rvIdx(RV.t); RV.decoding=true;
-  createImageBitmap(RV.frames[i].blob).then(bm=>{ RV.decoding=false; const c=$("#rvC"); c.getContext("2d").drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close(); }).catch(()=>{RV.decoding=false;});
+  decodeBlob(RV.frames[i].blob).then(bm=>{ RV.decoding=false; const c=$("#rvC"); c.getContext("2d").drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close(); }).catch(()=>{RV.decoding=false;});
   const t0=RV.frames[0].t, t1=RV.frames[RV.frames.length-1].t;
   $("#rvTime").textContent=(RV.t-t0).toFixed(1)+"s / "+(t1-t0).toFixed(1)+"s"; $("#rvSeek").value=String((RV.t-t0)/((t1-t0)||1));
 }
@@ -1720,7 +1741,7 @@ async function exportFrames(frames,w,h,overlay,prog){
   if(!c.captureStream||!window.MediaRecorder) throw new Error("このブラウザは動画の書き出しに対応していません");
   const ctx=c.getContext("2d");
   const mime=["video/mp4;codecs=avc1","video/mp4","video/webm;codecs=vp9","video/webm"].find(m=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(m))||"";
-  const drawAt=async i=>{ const f=frames[i]; const bm=await createImageBitmap(f.blob); ctx.drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close();
+  const drawAt=async i=>{ const f=frames[i]; const bm=await decodeBlob(f.blob); ctx.drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close();
     if(overlay&&S.frames&&S.frames.length){ const j=frameAt(f.t); if(Math.abs(S.frames[j].t-f.t)<0.25) drawFrame(ctx,S.frames[j],S.W,S.H,c.width,c.height,{skel:true,guide:true,phase:phaseOf(j)}); } };
   await drawAt(0);
   const stream=c.captureStream(30);
@@ -1749,7 +1770,7 @@ function dispBitmap(t){
   const D=S.disp; if(!D||!D.length) return null;
   const i=nearest(D.map(d=>d.t),t);
   if(bmpCache.has(i)){ lastDispBmp=bmpCache.get(i); return lastDispBmp; }
-  if(!bmpPend.has(i)){ bmpPend.add(i); createImageBitmap(D[i].blob).then(bm=>{ bmpPend.delete(i); bmpCache.set(i,bm);
+  if(!bmpPend.has(i)){ bmpPend.add(i); decodeBlob(D[i].blob).then(bm=>{ bmpPend.delete(i); bmpCache.set(i,bm);
       if(bmpCache.size>45){ const k=bmpCache.keys().next().value; const old=bmpCache.get(k); if(old!==lastDispBmp&&old.close) old.close(); bmpCache.delete(k); }
       draw(); }).catch(()=>bmpPend.delete(i)); }
   return lastDispBmp;

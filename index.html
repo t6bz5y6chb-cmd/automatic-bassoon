@@ -180,12 +180,38 @@ textarea.note-in{width:100%;min-height:64px;font:inherit;font-size:14px;color:va
 .exp{margin-top:10px}
 .exp .bar{margin:6px 0}
 .chk{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);margin-top:4px}
+.ymodal{position:fixed;inset:0;background:rgba(20,18,14,.55);z-index:40;display:flex;align-items:center;justify-content:center;padding:14px}
+.ymodal[hidden]{display:none}
+.ybox{background:var(--paper);border-radius:18px;padding:16px 16px 12px;width:min(440px,100%);max-height:96vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.ybox h2{margin:0 0 2px}
+.ytarget{width:100%;display:block;touch-action:manipulation;border-radius:12px;margin:8px 0 10px;cursor:crosshair}
+.ybtns{display:flex;gap:8px}
+.ybtns .btn{flex:1;justify-content:center;min-height:46px}
+.yado-wrap{display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:14px;align-items:start}
+@media(max-width:520px){.yado-wrap{grid-template-columns:1fr}.yado-wrap svg{max-width:220px;margin:0 auto}}
+.yado-wrap svg{width:100%;display:block;border-radius:10px}
+.ycause{border-top:1px solid var(--line);padding:8px 0;font-size:13.5px}
+.ycause:first-child{border-top:0}
+.ycause b{font-size:14px}
+.ysup{display:block;margin-top:3px;font-size:12.5px}
+.ysup.hit{color:var(--ink)}
+.ysup.miss{color:var(--ink2)}
 .floatback{position:fixed;right:14px;bottom:14px;z-index:20;display:none;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 </style>
 </head>
 <body>
 <button class="btn primary floatback" id="floatBack">← 遅延映像に戻る</button>
 <div class="toast" id="toast"></div>
+<div class="ymodal" id="yModal" hidden>
+  <div class="ybox" role="dialog" aria-modal="true" aria-labelledby="yTitle">
+    <h2 id="yTitle">矢所を選ぶ</h2>
+    <div class="small muted">矢が当たった（外れた）場所をタップしてください。射位から的を見た向きです。</div>
+    <svg class="ytarget" id="ySvg" viewBox="-2.4 -2.4 4.8 4.8" aria-label="的と安土"></svg>
+    <div class="small muted" id="yInfo" style="min-height:1.6em;text-align:center"></div>
+    <div class="ybtns" style="margin-top:6px"><button class="btn" id="ySkip">矢所なしで診断</button><button class="btn primary" id="yOk" disabled>この矢所で診断</button></div>
+    <div style="text-align:center;margin-top:8px"><button class="linkish" id="yCancel">やめる</button></div>
+  </div>
+</div>
 <div class="wrap">
   <header class="top">
     <div class="brand">
@@ -267,6 +293,7 @@ textarea.note-in{width:100%;min-height:64px;font:inherit;font-size:14px;color:va
   <!-- 記録 -->
   <section class="card" id="recCard" style="display:none">
     <div class="ph-head" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px"><h2 style="margin:0">記録</h2><span class="small muted" id="recUsage"></span></div>
+    <div id="recAgg"></div>
     <div class="reclist" id="recList"></div>
     <p class="small muted" style="margin:12px 0 0">記録はこの端末のブラウザの中だけに保存されます。ブラウザのデータを消すと記録も消えるので、残しておきたい射は「動画で保存」で写真アプリに保存してください。</p>
   </section>
@@ -366,6 +393,11 @@ textarea.note-in{width:100%;min-height:64px;font:inherit;font-size:14px;color:va
           <div class="recbar" id="resBarActions"></div>
         </div>
       </div>
+    </section>
+
+    <section class="card" id="yadoCard">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px"><h2 style="margin:0">矢所 × 射形</h2><button class="btn sm ghost" id="yEdit">矢所を変える</button></div>
+      <div id="yadoBody"></div>
     </section>
 
     <section class="card">
@@ -545,7 +577,7 @@ $("#run").onclick=()=>{
   const pm=mv.play(); if(pm&&pm.then) pm.then(()=>mv.pause()).catch(()=>{});
   runVideo(av).catch(e=>{ console.error(e); setBusy(false); showErr("解析中にエラーが発生しました："+esc(e.message||e)); });
 };
-$("#demo").onclick=()=>{ hideErr(); const d=makeDemo(); S.source="demo"; S.W=d.W; S.H=d.H; S.fps=d.fps; finishAnalysis(d.frames); };
+$("#demo").onclick=async()=>{ hideErr(); const y=await askYadokoro(); if(y==="cancel") return; S.yado=y; const d=makeDemo(); S.source="demo"; S.W=d.W; S.H=d.H; S.fps=d.fps; finishAnalysis(d.frames); };
 $("#cancel").onclick=()=>{ S.cancel=true; };
 $("#again").onclick=()=>backToInput();
 function backToInput(){ pause(); $("#results").style.display="none"; $("#floatBack").style.display="none";
@@ -634,7 +666,9 @@ function isBlank(ctx,w,h){
 }
 async function runVideo(av){ return withBusy(()=>runVideoInner(av)); }
 async function runVideoInner(av){
-  hideErr(); S.cancel=false; setBusy(true,"動画を準備中…");
+  hideErr();
+  const y=await askYadokoro(); if(y==="cancel") return; S.yado=y;
+  S.cancel=false; setBusy(true,"動画を準備中…");
   const q=$("#optModel").value, fps=+$("#optFps").value;
   try{ await waitMeta(av,30000); }
   catch(e){ setBusy(false); showErr(e&&e.message==="TIMEOUT"?"動画の読み込みに時間がかかりすぎています。iCloudにある動画は写真アプリで一度再生して端末にダウンロードしてから、もう一度選んでください。":videoErrMsg(av.error)); return; }
@@ -844,7 +878,7 @@ function grade(v,good,warn){ if(!Number.isFinite(v)) return "na"; if(good(v)) re
 const absIn=(lim)=>v=>Math.abs(v)<=lim;
 
 function computeMetrics(F,P,ctx){
-  const {Sm,Tm,dir,style}=ctx; const M=[];
+  const {Sm,Tm,dir,style}=ctx; const M=[]; const V={}; M.vals=V;
   const seg=k=>P.ph&&P.ph[k]?F.slice(P.ph[k].s,P.ph[k].e+1):[];
   const md=(arr,fn)=>median(arr.map(fn));
   const at=(arr)=>arr.length?arr[arr.length>>1].t:null;
@@ -915,29 +949,29 @@ function computeMetrics(F,P,ctx){
   if(!P.ok) return M;
   // ---- 会
   const kai=F.slice(P.kaiStart,P.kaiEnd+1);
-  const kaiLen=P.ph.kai.t1-P.ph.kai.t0+1/ctx.fps;
+  const kaiLen=P.ph.kai.t1-P.ph.kai.t0+1/ctx.fps; V.kaiLen=kaiLen;
   const tKai=kai.length?kai[Math.max(0,kai.length-1-Math.round(ctx.fps*0.25))].t:null;
   add({grp:"kai",nm:"会の長さ",val:`${kaiLen.toFixed(1)}秒`,ideal:"頬付けしてから離れまで3秒以上",t:F[P.kaiStart].t,st:grade(kaiLen,v=>v>=3,v=>v>=1.5),
     adv:kaiLen>=3?"会で十分に保てています。":kaiLen>=1.5?"会がやや短めです。口割りに納まってから、もう一息ぶん伸び合う時間を作りましょう。":"会がほとんど無く、引き納めてすぐに離れています。早気の傾向がないか確認してください。会で呼吸を整えてから離す練習（巻藁で数を数える等）が有効です。"});
-  const eo=md(kai,f=>f.elbO), visO=md(kai,f=>f.visO);
+  const eo=md(kai,f=>f.elbO), visO=md(kai,f=>f.visO); V.eo=visO>0.3?eo:NaN;
   add({grp:"kai",nm:"押手（弓手）の肘の伸び",val:`${eo.toFixed(0)}°`,ideal:"ほぼまっすぐ（165°以上）",t:tKai,st:visO>0.3?grade(eo,v=>v>=165,v=>v>=155):"na",
     adv:!(visO>0.3)?"押手が隠れていて計測できません。":eo>=165?"押手がまっすぐ伸びています。":"押手の肘が曲がっています（弓手が折れる・負ける）。手の内を整え、肩根から的の中心へ押し続ける意識で伸ばしましょう。"});
   const ke=md(kai,f=>(f.kSh.y-f.kEl.y)/Tm), visK=md(kai,f=>f.visK);
   add({grp:"kai",nm:"勝手（妻手）の肘の高さ",val:`肩より${ke>=0?"上":"下"} ${(Math.abs(ke)*100).toFixed(0)}%`,ideal:"肩の高さ〜やや上",t:tKai,st:visK>0.3?grade(ke,v=>v>=-0.08&&v<=0.3,v=>v>=-0.18&&v<=0.45):"na",
     adv:!(visK>0.3)?"勝手が隠れていて計測できません。":ke<-0.08?"勝手の肘が下がっています。肘が下がると引き込みが浅くなり、離れで矢所が乱れます。肘を肩の線より下げずに、肘で後ろへ回し込む意識を。":ke>0.3?"勝手の肘が上がりすぎています。肩が詰まりやすいので、肘は肩の線の延長上に納めましょう。":"勝手の肘が肩の線上に納まっています。"});
-  const kw=md(kai,f=>(f.kWr.y-f.mouth.y)/Tm);
+  const kw=md(kai,f=>(f.kWr.y-f.mouth.y)/Tm); V.kw=visK>0.3?kw:NaN;
   add({grp:"kai",nm:"口割り（勝手の高さ）",val:`手首が口より${kw>=0?"下":"上"} ${(Math.abs(kw)*100).toFixed(0)}%`,ideal:"矢が口の線（手首は少し下）",t:tKai,st:visK>0.3?grade(kw,v=>v>=-0.05&&v<=0.25,v=>v>=-0.15&&v<=0.38):"na",
     adv:!(visK>0.3)?"勝手が隠れていて計測できません。":kw<-0.05?"勝手が高く、口割りより上で納まっています。矢が口の線に来るまで引き下ろしましょう。":kw>0.25?"勝手が低く、口割りより下で納まっています。頬付けを確かめ、矢が口の線に来る位置で納めましょう。":"口割りの高さに納まっています。"});
-  const ak=md(kai,f=>f.arrow);
+  const ak=md(kai,f=>f.arrow); V.ak=ak;
   add({grp:"kai",nm:"会での矢の水平",val:`矢先${ak>0?"上がり":"下がり"} ${f1(ak)}°`,ideal:"水平（±3°以内）",t:tKai,st:grade(ak,absIn(3),absIn(6)),
     adv:Math.abs(ak)<=3?"矢がほぼ水平に納まっています。":ak>0?"会で矢先が上がっています。押手が高いか、口割りが低い可能性があります。":"会で矢先が下がっています。押手が下がっているか、口割りが高い可能性があります。"});
-  const sk=md(kai,f=>f.shTilt);
+  const sk=md(kai,f=>f.shTilt); V.sk=sk;
   add({grp:"kai",nm:"会での肩線",val:tiltTxt(sk,"押手肩","勝手肩"),ideal:"水平（±3°以内）",t:tKai,st:grade(sk,absIn(3),absIn(6)),
     adv:Math.abs(sk)<=3?"両肩が水平に納まっています。":sk>0?"押手（弓手）の肩が上がっています（肩が詰まる）。押手肩を下げ、肩根から押し開く意識で。会で肩が浮くと離れで押手が負けやすくなります。":"勝手（妻手）の肩が上がっています。勝手の肩を下ろし、肘で引き納める意識で。"});
   const cr=md(kai,f=>f.cross);
   add({grp:"kai",nm:"縦横十文字（背骨と肩線の直角）",val:`直角から${f1(cr)}°`,ideal:"直角（±3°以内）",t:tKai,st:grade(cr,absIn(3),absIn(6)),
     adv:Math.abs(cr)<=3?"縦線と横線が直角に交わっています。":"背骨と肩の線が直角になっていません。胴が傾くか片方の肩が浮いています。縦線（足〜頭）をまっすぐ立てたうえで、横線を左右に伸ばしましょう。"});
-  const lk=md(kai,f=>f.lean), dl=lk-lb;
+  const lk=md(kai,f=>f.lean), dl=lk-lb; V.lk=lk;
   add({grp:"kai",nm:"会での胴の傾き",val:`${sgn(lk)}${f1(lk)}°（構えから${sgn(dl)}${f1(dl)}°）`,ideal:"構えのまま（±2.5°）",t:tKai,st:grade(Math.max(Math.abs(lk),Math.abs(dl)),v=>v<=2.5,v=>v<=5),
     adv:(Math.abs(lk)<=2.5&&Math.abs(dl)<=2.5)?"引分けても胴造りが崩れていません。":lk>0?"会で上体が的側に傾いています（懸かる）。押手で押そうとして体ごと的へ寄っていないか確認しましょう。":"会で上体が的と反対側に傾いています（退く）。勝手で引こうとして体ごと後ろへ逃げていないか確認しましょう。"});
   const sw=Math.hypot(stdev(kai.map(f=>f.hipMid.x)),stdev(kai.map(f=>f.hipMid.y)))/Tm*100;
@@ -945,7 +979,7 @@ function computeMetrics(F,P,ctx){
     adv:!(kai.length>=4)?"会が短すぎて計測できません。":sw<1.5?"会で体が安定しています。":"会で体が揺れています。足踏みと胴造りを見直し、重心を下げて静かに伸び合いましょう。"});
   if(kai.length>=4){
     const d0=median(kai.slice(0,Math.max(2,kai.length>>2)).map(f=>f.D)), d1=median(kai.slice(-Math.max(2,kai.length>>2)).map(f=>f.D));
-    const ch=(d1-d0)/d0*100;
+    const ch=(d1-d0)/d0*100; V.nobi=ch;
     add({grp:"kai",nm:"伸び合い",val:`会の間に引き幅が${ch>=0?"＋":"−"}${f1(ch)}%`,ideal:"縮まない（−1%以上）",t:tKai,st:grade(ch,v=>v>=-1,v=>v>=-3),
       adv:ch>=-1?"会の間、引き幅が保たれ（伸びて）います。":"会の間に引き幅が縮んでいます（もたれ・縮み）。会は「止まる」のではなく、左右へ伸び続ける時間です。"});
   }
@@ -954,18 +988,18 @@ function computeMetrics(F,P,ctx){
   const r0=P.r0, fps=ctx.fps;
   const pre=F.slice(Math.max(0,r0-Math.round(0.25*fps)),Math.max(1,r0-Math.round(0.05*fps)+1));
   const dKai=median(kai.map(f=>f.D)), dPre=median(pre.map(f=>f.D));
-  const yur=(dPre-dKai)/dKai*100;
+  const yur=(dPre-dKai)/dKai*100; V.yur=yur;
   add({grp:"hanare",nm:"離れ直前の緩み",val:`引き幅 ${yur>=0?"＋":"−"}${f1(yur)}%`,ideal:"緩まない（−2%以上）",t:F[r0].t,st:grade(yur,v=>v>=-2,v=>v>=-4.5),
     adv:yur>=-2?"離れの直前まで引き幅を保てています。":"離れの直前に勝手が的側へ戻っています（緩み離れ）。指先で弦を放そうとせず、伸び合いの延長で自然に離れるようにしましょう。"});
   const a=F[Math.max(0,r0-1)], b=F[Math.min(F.length-1,r0+Math.max(2,Math.round(0.25*fps)))];
-  const back=(a.kWr.x-b.kWr.x)*dir, down=(b.kWr.y-a.kWr.y);
+  const back=(a.kWr.x-b.kWr.x)*dir, down=(b.kWr.y-a.kWr.y); V.kBack=back/Sm; V.kDown=deg(Math.atan2(down,Math.abs(back)+1e-6));
   const ka=deg(Math.atan2(down,Math.abs(back)+1e-6));
   let kst, kadv, kval;
   if(back<=0.05*Sm){ kst="bad"; kval="前・内側へ"; kadv="勝手が後ろへ飛ばず、前（的側）に出ています（前離れ・引っかけ）。肘で引き納めた方向へ、弦の力をそのまま後ろへ逃がすように離しましょう。"; }
   else { kst=grade(ka,v=>v>=-15&&v<=25,v=>v>=-30&&v<=40); kval=`後方へ（${ka>=0?"下向き":"上向き"} ${f1(ka)}°）`;
     kadv=kst==="good"?"勝手が矢筋の延長方向へまっすぐ離れています。":ka>25?"勝手が下へ落ちるように離れています。肘の高さを保ったまま、矢筋に沿って後ろへ開きましょう。":"勝手が上へ跳ね上がるように離れています。手首や指先で離していないか確認しましょう。"; }
   add({grp:"hanare",nm:"勝手の離れる方向",val:kval,ideal:"矢筋の延長（真後ろ〜やや下）",t:b.t,st:kst,adv:kadv});
-  const oUp=(a.oWr.y-b.oWr.y)/Tm, oBack=(a.oWr.x-b.oWr.x)*dir/Tm;
+  const oUp=(a.oWr.y-b.oWr.y)/Tm, oBack=(a.oWr.x-b.oWr.x)*dir/Tm; V.oUp=oUp; V.oBack=oBack;
   let ost="good", oadv="押手が的の方向に残っています。";
   if(oUp>0.18){ ost=oUp>0.3?"bad":"warn"; oadv="離れで押手が上へ跳ねています。手の内で弓を握りすぎていないか、押手の押しが的の中心へ向いているか確認しましょう。"; }
   else if(oBack>0.15){ ost=oBack>0.28?"bad":"warn"; oadv="離れで押手が手前（体側）へ引けています（押手が緩む）。最後まで的の中心を押し続けましょう。"; }
@@ -1000,7 +1034,7 @@ async function finishAnalysis(raw){
   const M=computeMetrics(F,P,{Sm,Tm,dir,style,fps:S.fps});
   const graded=M.filter(m=>STATUS[m.st]&&STATUS[m.st].w!=null);
   const score=graded.length?Math.round(graded.reduce((s,m)=>s+STATUS[m.st].w,0)/graded.length):null;
-  S.frames=F; S.res={P,M,hand,dir,Sm,Tm,style,score,raw};
+  S.frames=F; S.res={P,M,hand,dir,Sm,Tm,style,score,raw,yado:S.yado||null};
   setBusy(false); setProg(0);
   await renderResults();
 }
@@ -1032,6 +1066,7 @@ async function renderResults(){
   html+= top.length? top.map(m=>`<li>${chip(m.st)}<span><b>${GROUPS.find(g=>g.k===m.grp).name}・${esc(m.nm)}</b>　${esc(m.adv.split("。")[0])}。</span></li>`).join("")
        : `<li>${chip("good")}<span>大きな歪みは見つかりませんでした。</span></li>`;
   $("#issues").innerHTML=html;
+  renderYadoCard();
 
   // 位相の凡例
   $("#legendPh").innerHTML=PH_ORDER.filter(k=>P.ph&&P.ph[k]).map(k=>`<span><i style="background:var(${PHASES[k].color})"></i>${PHASES[k].name}</span>`).join("");
@@ -1502,13 +1537,14 @@ async function camDiagnose(){
   if(CAM.busy||!CAM.buf.length) return;
   CAM.busy=true; $("#camDiag").disabled=true; camErr(null);
   try{
+    const y=await askYadokoro(); if(y==="cancel") return; S.yado=y;
     const now=nowS(), win=+$("#camWin").value;
     const frames=CAM.buf.filter(f=>f.t>=now-win);
     if(frames.length<CAP_FPS*6) throw new Error("録画がまだ短すぎます（6秒以上必要）。");
     S.curRec=null;
     const out=await diagnoseFrames(frames,frames[0].w,frames[0].h,`直前${Math.round(frames[frames.length-1].t-frames[0].t)}秒`,camProg);
     if($("#camAuto").checked){
-      try{ S.curRec=await saveRecord({frames:out.frames,w:S.W,h:S.H,analysis:{raw:out.raw,aF:out.aF,hand:S.res.hand},score:S.res.score,stage:S.res.P.stage});
+      try{ S.curRec=await saveRecord({frames:out.frames,w:S.W,h:S.H,analysis:{raw:out.raw,aF:out.aF,hand:S.res.hand,yado:S.res.yado||null},score:S.res.score,stage:S.res.P.stage,yado:S.res.yado||null});
         renderResBar(); toast("この射を記録に保存しました"); }catch(e){ console.warn(e); toast("記録の保存に失敗しました（空き容量を確認してください）"); }
     }
   }catch(e){ console.error(e); camErr(esc(e.message||e)); }
@@ -1546,7 +1582,7 @@ async function saveRecord(rec){
   let ti=Math.floor(fr.length*0.6);
   if(rec.analysis&&S.res&&S.res.P.ph&&S.res.P.ph.kai){ const tk=S.frames[S.res.P.ph.kai.e].t; ti=nearest(rec.frames.map(f=>f.t),tk); }
   const thumb=await makeThumb(rec.frames[ti].blob);
-  const meta={id,created:id,dur:rec.frames[rec.frames.length-1].t-rec.frames[0].t,score:rec.score,stage:rec.stage,note:"",thumb:await thumb.arrayBuffer(),hasAnalysis:!!rec.analysis};
+  const meta={id,created:id,dur:rec.frames[rec.frames.length-1].t-rec.frames[0].t,score:rec.score,stage:rec.stage,note:"",thumb:await thumb.arrayBuffer(),hasAnalysis:!!rec.analysis,yado:rec.yado||null};
   await idb("data","readwrite",st=>st.put({id,frames:fr,w:rec.w,h:rec.h,analysis:rec.analysis}));
   await idb("meta","readwrite",st=>st.put(meta));
   return id;
@@ -1573,6 +1609,7 @@ async function renderRecList(){
     const sc=m.hasAnalysis?(m.score!=null?`スコア ${m.score}`:"診断済み"):"未診断";
     return `<button class="recitem" data-id="${m.id}"><img src="${u}" alt=""><div><b>${fmtDate(m.created)}</b><span>${Math.round(m.dur)}秒・${sc}</span>${m.note?`<span class="nt">${esc(m.note)}</span>`:""}</div></button>`; }).join("");
   box.querySelectorAll(".recitem").forEach(b=>b.onclick=()=>openRecord(+b.dataset.id));
+  renderRecAgg(metas);
   try{ if(navigator.storage&&navigator.storage.estimate){ const e=await navigator.storage.estimate(); const mb=e.usage/1048576; $("#recUsage").textContent=`${metas.length}件・${mb<1?"1MB未満":mb.toFixed(0)+"MB"}使用`; } else $("#recUsage").textContent=`${metas.length}件`; }catch(_){}
 }
 
@@ -1585,7 +1622,7 @@ async function openRecord(id){
   if(d.analysis){
     $("#recCard").style.display="none";
     S.disp=d.frames; S.source="frames"; S.W=d.w; S.H=d.h; S.fps=d.analysis.aF;
-    $("#optHand").value=d.analysis.hand||"auto";
+    $("#optHand").value=d.analysis.hand||"auto"; S.yado=d.analysis.yado||meta.yado||null;
     await finishAnalysis(d.analysis.raw);
     return;
   }
@@ -1617,12 +1654,14 @@ $("#rvPlay").onclick=()=>{
 $("#rvSeek").oninput=e=>{ rvStop(); const t0=RV.frames[0].t, t1=RV.frames[RV.frames.length-1].t; RV.t=t0+(t1-t0)*(+e.target.value); rvDraw(); };
 $("#rvBack").onclick=()=>{ rvStop(); $("#recView").style.display="none"; $("#recCard").style.display=""; S.curRec=null; renderRecList(); };
 $("#rvDiag").onclick=()=>withBusy(async()=>{
-  if(!RV.frames) return; rvStop(); $("#rvDiag").disabled=true; $("#rvErr").style.display="none";
+  if(!RV.frames) return; rvStop();
+  const y=await askYadokoro(); if(y==="cancel") return; S.yado=y;
+  $("#rvDiag").disabled=true; $("#rvErr").style.display="none";
   const prog=(p,txt)=>{ $("#rvProg").style.display="block"; $("#rvBar").style.width=(p*100).toFixed(1)+"%"; if(txt) $("#rvProgText").textContent=txt; };
   try{
     S.curRec=RV.id;
     const out=await diagnoseFrames(RV.frames,RV.w,RV.h,"記録",prog);
-    await patchRecord(RV.id,{hasAnalysis:true,score:S.res.score,stage:S.res.P.stage},{analysis:{raw:out.raw,aF:out.aF,hand:S.res.hand}});
+    await patchRecord(RV.id,{hasAnalysis:true,score:S.res.score,stage:S.res.P.stage,yado:S.res.yado||null},{analysis:{raw:out.raw,aF:out.aF,hand:S.res.hand,yado:S.res.yado||null}});
     $("#recView").style.display="none"; renderResBar(); toast("診断結果を記録に保存しました");
   }catch(e){ console.error(e); const el=$("#rvErr"); el.textContent=e.message||String(e); el.style.display="block"; }
   finally{ $("#rvDiag").disabled=false; $("#rvProg").style.display="none"; }
@@ -1658,7 +1697,7 @@ function renderActions(host,o){
   });
   if(q(".saveBtn")) q(".saveBtn").onclick=async()=>{
     q(".saveBtn").disabled=true;
-    try{ S.curRec=await saveRecord({frames:o.frames,w:o.w,h:o.h,analysis:S.res?{raw:S.res.raw,aF:S.fps,hand:S.res.hand}:null,score:S.res?S.res.score:null,stage:S.res?S.res.P.stage:null});
+    try{ S.curRec=await saveRecord({frames:o.frames,w:o.w,h:o.h,analysis:S.res?{raw:S.res.raw,aF:S.fps,hand:S.res.hand,yado:S.res.yado||null}:null,score:S.res?S.res.score:null,stage:S.res?S.res.P.stage:null,yado:S.res?S.res.yado||null:null});
       S.curMeta=null; toast("記録に保存しました"); renderActions(host,o); }
     catch(e){ console.warn(e); toast("記録の保存に失敗しました"); q(".saveBtn").disabled=false; }
   };
@@ -1714,6 +1753,113 @@ function dispBitmap(t){
       if(bmpCache.size>45){ const k=bmpCache.keys().next().value; const old=bmpCache.get(k); if(old!==lastDispBmp&&old.close) old.close(); bmpCache.delete(k); }
       draw(); }).catch(()=>bmpPend.delete(i)); }
   return lastDispBmp;
+}
+
+/* ==================== 矢所 ==================== */
+// 座標：的の半径を1、射位から的を見て右が＋x、上が＋y
+const SVGNS="http://www.w3.org/2000/svg";
+function curHand(){ if(S.res&&S.res.hand) return S.res.hand; const v=(S.mode==="cam"?$("#camHand"):$("#optHand")).value; return v==="R"?"R":"L"; }
+function targetSVG(svg,pts,opt={}){
+  const hand=opt.hand||curHand(), fr=hand==="R"?-1:1; // 前の向き（右射なら右）
+  const R=[[1,"#1c1a17"],[0.86,"#fbfaf6"],[0.79,"#1c1a17"],[0.62,"#fbfaf6"],[0.55,"#1c1a17"],[0.37,"#fbfaf6"],[0.29,"#1c1a17"],[0.13,"#fbfaf6"]];
+  let h=`<rect x="-2.4" y="-2.4" width="4.8" height="4.8" fill="#cdb48a"/>`+
+    `<rect x="-2.4" y="-2.4" width="4.8" height="4.8" fill="url(#sand)" opacity=".35"/>`+
+    `<defs><pattern id="sand" width=".18" height=".18" patternUnits="userSpaceOnUse"><circle cx=".05" cy=".06" r=".012" fill="#8f7650"/><circle cx=".13" cy=".14" r=".01" fill="#8f7650"/></pattern></defs>`;
+  h+=`<circle r="1.03" fill="#e9dcc0"/>`+R.map(([r,c])=>`<circle r="${r}" fill="${c}"/>`).join("");
+  h+=`<line x1="-2.4" y1="0" x2="2.4" y2="0" stroke="rgba(0,0,0,.18)" stroke-width=".012"/><line x1="0" y1="-2.4" x2="0" y2="2.4" stroke="rgba(0,0,0,.18)" stroke-width=".012"/>`;
+  const lab=(x,y,t)=>`<text x="${x}" y="${y}" font-size=".26" font-weight="700" fill="#4a3c25" text-anchor="middle" dominant-baseline="middle" font-family="Noto Sans JP,sans-serif">${t}</text>`;
+  h+=lab(0,-2.18,"上")+lab(0,2.2,"下")+lab(2.18*fr,0,"前")+lab(-2.18*fr,0,"後");
+  (pts||[]).forEach((p,i)=>{ const cx=clamp(p.x,-2.3,2.3), cy=clamp(-p.y,-2.3,2.3), last=i===pts.length-1;
+    const col=p.col||(last&&opt.highlightLast!==false?"#d03b3b":"#2a78d6");
+    h+=`<circle cx="${cx}" cy="${cy}" r="${last&&opt.highlightLast!==false?0.1:0.075}" fill="${col}" stroke="#fff" stroke-width=".03" opacity="${p.op??1}"/>`; });
+  svg.innerHTML=h;
+}
+function yadoDesc(y,hand){
+  if(!y) return null;
+  const fr=(hand==="R"?-1:1), fx=y.x*fr, r=Math.hypot(y.x,y.y);
+  const parts=[]; if(y.y>0.35) parts.push("上"); if(y.y<-0.35) parts.push("下"); if(fx>0.35) parts.push("前"); if(fx<-0.35) parts.push("後");
+  const dirTxt=parts.join("・");
+  if(r<=1) return {hit:true,r,fx,fy:y.y,parts,label: r<0.4?"的中（中心付近）":`的中（${dirTxt}寄り）`};
+  const far=r-1; return {hit:false,r,fx,fy:y.y,parts,label:`${dirTxt||"外れ"}に外れ（尺二的の縁から約${Math.max(1,Math.round(far*18))}cm）`};
+}
+/* 矢所の向き × 計測値 → 原因の候補 */
+function yadoCauses(d,V){
+  if(!d||!d.parts.length) return [];
+  const num=v=>Number.isFinite(v);
+  const C={
+    "下":{lead:"矢が下に行く主な原因",items:[
+      {t:"会で矢先が下がっている",ok:num(V.ak)&&V.ak<-2,val:num(V.ak)?`会での矢：矢先${V.ak>0?"上がり":"下がり"} ${f1(V.ak)}°`:null},
+      {t:"口割りが高い（勝手が口より上で納まる）",ok:num(V.kw)&&V.kw<-0.05,val:num(V.kw)?`口割り：手首が口より${V.kw>=0?"下":"上"} ${(Math.abs(V.kw)*100).toFixed(0)}%`:null},
+      {t:"離れで押手が下に落ちる（押手が負ける）",ok:num(V.oUp)&&V.oUp<-0.3,val:num(V.oUp)?`離れでの押手：上下 ${V.oUp>=0?"＋":"−"}${f1(V.oUp*100)}%`:null},
+      {t:"離れ直前の緩み・会での縮みで矢勢が落ちる",ok:(num(V.yur)&&V.yur<-2)||(num(V.nobi)&&V.nobi<-1),val:num(V.yur)?`緩み ${V.yur>=0?"＋":"−"}${f1(V.yur)}%・伸び合い ${num(V.nobi)?(V.nobi>=0?"＋":"−")+f1(V.nobi)+"%":"–"}`:null},
+      {t:"会が短い（早気）で狙いが定まらない",ok:num(V.kaiLen)&&V.kaiLen<1.5,val:num(V.kaiLen)?`会の長さ ${V.kaiLen.toFixed(1)}秒`:null},
+      {t:"押手の肘が曲がり、押しが足りない",ok:num(V.eo)&&V.eo<160,val:num(V.eo)?`押手の肘 ${V.eo.toFixed(0)}°`:null},
+    ],unseen:"上押しが弱い・弓を握り込む手の内、狙いが下（正面の映像では測れません）"},
+    "上":{lead:"矢が上に行く主な原因",items:[
+      {t:"会で矢先が上がっている",ok:num(V.ak)&&V.ak>2,val:num(V.ak)?`会での矢：矢先${V.ak>0?"上がり":"下がり"} ${f1(V.ak)}°`:null},
+      {t:"口割りが低い（勝手が口より下で納まる）",ok:num(V.kw)&&V.kw>0.25,val:num(V.kw)?`口割り：手首が口より${V.kw>=0?"下":"上"} ${(Math.abs(V.kw)*100).toFixed(0)}%`:null},
+      {t:"離れで押手が上に跳ねる",ok:num(V.oUp)&&V.oUp>0.18,val:num(V.oUp)?`離れでの押手：上下 ${V.oUp>=0?"＋":"−"}${f1(V.oUp*100)}%`:null},
+    ],unseen:"上押しが強すぎる手の内、狙いが上（正面の映像では測れません）"},
+    "前":{lead:"矢が前に行く主な原因",items:[
+      {t:"離れ直前に緩む（緩み離れ）",ok:num(V.yur)&&V.yur<-2,val:num(V.yur)?`緩み ${V.yur>=0?"＋":"−"}${f1(V.yur)}%`:null},
+      {t:"勝手が後ろへ抜けず前に出る（前離れ）",ok:num(V.kBack)&&V.kBack<=0.05,val:num(V.kBack)?`勝手が後ろへ ${(V.kBack*100).toFixed(0)}%肩幅`:null},
+      {t:"離れで押手が手前に引ける（押しが負ける）",ok:num(V.oBack)&&V.oBack>0.15,val:num(V.oBack)?`離れでの押手：手前 ${V.oBack>=0?"＋":"−"}${f1(V.oBack*100)}%`:null},
+    ],unseen:"角見が利いていない手の内、押手の前への流れ、狙いが前（前後方向の動きは正面の映像では測れません）"},
+    "後":{lead:"矢が後ろに行く主な原因",items:[],
+      unseen:"角見の利かせすぎ・押手を後ろへ振る、勝手を体の後ろへ引き抜く離れ、狙いが後ろ（前後方向の動きは正面の映像では測れません。側面か背面からの撮影が必要です）"},
+  };
+  return d.parts.map(k=>({dir:k,...C[k]}));
+}
+function renderYadoCard(){
+  const card=$("#yadoCard"), body=$("#yadoBody"); if(!card) return;
+  const y=S.res&&S.res.yado, hand=S.res?S.res.hand:"L";
+  if(!y){ body.innerHTML=`<div class="small muted">矢所が選ばれていません。「矢所を変える」から選ぶと、射形の計測と合わせて外れた原因を推定します。</div>`; return; }
+  const d=yadoDesc(y,hand), V=(S.res.M&&S.res.M.vals)||{};
+  const causes=yadoCauses(d,V);
+  let txt=`<div style="font-weight:700;font-size:16px;margin-bottom:6px">${esc(d.label)}</div>`;
+  if(!causes.length) txt+=`<div class="small muted">矢所は的の中心付近です。射形の課題は上の一覧を参考にしてください。</div>`;
+  else {
+    if(!S.res.P.ok) txt+=`<div class="small muted" style="margin-bottom:6px">会・離れが確認できていないため、射形との照らし合わせは一部しかできません。</div>`;
+    txt+=causes.map(c=>{
+      const hits=c.items.filter(i=>i.ok), others=c.items.filter(i=>!i.ok);
+      return `<div class="ycause"><b>${c.lead}</b>
+        ${hits.length?hits.map(i=>`<span class="ysup hit">${chip("bad")} <b>${esc(i.t)}</b>：この射の計測で当てはまる${i.val?`（${esc(i.val)}）`:""}</span>`).join(""):`<span class="ysup miss">この射の計測では、${c.dir}に行く原因になる射形の崩れは見つかりませんでした。</span>`}
+        ${others.length?`<span class="ysup miss">計測では当てはまらない：${others.map(i=>esc(i.t)).join("、")}</span>`:""}
+        <span class="ysup miss">ほかに考えられる原因：${esc(c.unseen)}</span></div>`; }).join("");
+  }
+  body.innerHTML=`<div class="yado-wrap"><svg viewBox="-2.4 -2.4 4.8 4.8" aria-label="矢所"></svg><div>${txt}</div></div>`;
+  targetSVG(body.querySelector("svg"),[y],{hand});
+  // 主な課題の先頭に、矢所と一致した項目を出す
+  const hitList=causes.flatMap(c=>c.items.filter(i=>i.ok).map(i=>i.t));
+  if(hitList.length){ const li=document.createElement("li"); li.innerHTML=`${chip("bad")}<span><b>矢所と一致</b>　${esc(d.label)}。射形では「${esc(hitList.join("」「"))}」が当てはまります。</span>`; $("#issues").prepend(li); }
+}
+$("#yEdit").onclick=async()=>{
+  const y=await askYadokoro({title:"矢所を変える",okText:"この矢所にする",skipText:"矢所を消す"}); if(y==="cancel") return;
+  S.yado=y; S.res.yado=y; renderResults();
+  if(S.curRec){ try{ await patchRecord(S.curRec,{yado:y},null); const d=await idb("data","readonly",st=>st.get(S.curRec)); if(d&&d.analysis){ d.analysis.yado=y; await idb("data","readwrite",st=>st.put(d)); } }catch(e){ console.warn(e); } }
+};
+function askYadokoro(o={}){
+  return new Promise(res=>{
+    const m=$("#yModal"), svg=$("#ySvg"), ok=$("#yOk"); let pt=null;
+    $("#yTitle").textContent=o.title||"矢所を選ぶ"; ok.textContent=o.okText||"この矢所で診断"; $("#ySkip").textContent=o.skipText||"矢所なしで診断";
+    const hand=curHand();
+    const draw=()=>{ targetSVG(svg,pt?[pt]:[],{hand}); const d=pt?yadoDesc(pt,hand):null; $("#yInfo").textContent=d?d.label:"タップして矢所を置く"; ok.disabled=!pt; };
+    draw(); m.hidden=false;
+    svg.onclick=e=>{ const P=svg.createSVGPoint(); P.x=e.clientX; P.y=e.clientY; const q=P.matrixTransform(svg.getScreenCTM().inverse()); pt={x:+q.x.toFixed(3),y:+(-q.y).toFixed(3)}; draw(); };
+    const done=v=>{ m.hidden=true; svg.onclick=null; res(v); };
+    ok.onclick=()=>done(pt); $("#ySkip").onclick=()=>done(null); $("#yCancel").onclick=()=>done("cancel");
+  });
+}
+function renderRecAgg(metas){
+  const box=$("#recAgg"); const ys=metas.filter(m=>m.yado).sort((a,b)=>a.created-b.created);
+  if(!ys.length){ box.innerHTML=""; return; }
+  const hits=ys.filter(m=>Math.hypot(m.yado.x,m.yado.y)<=1).length;
+  const mx=ys.reduce((s,m)=>s+m.yado.x,0)/ys.length, my=ys.reduce((s,m)=>s+m.yado.y,0)/ys.length;
+  const d=yadoDesc({x:mx,y:my},curHand());
+  const tend=d.parts.length?`全体に${d.parts.join("・")}寄り`:"全体に中心付近";
+  box.innerHTML=`<div class="yado-wrap" style="margin-bottom:14px"><svg viewBox="-2.4 -2.4 4.8 4.8" aria-label="矢所の分布"></svg>
+    <div><div style="font-weight:700;font-size:15px">矢所の分布</div><div class="small muted">矢所を記録した${ys.length}射のうち的中 ${hits}本（${Math.round(hits/ys.length*100)}%）。${tend}。新しい射ほど濃く表示し、最新は赤です。</div></div></div>`;
+  targetSVG(box.querySelector("svg"),ys.map((m,i)=>({x:m.yado.x,y:m.yado.y,op:0.35+0.65*(i+1)/ys.length})),{highlightLast:true});
 }
 
 /* ==================== 合成サンプル ==================== */

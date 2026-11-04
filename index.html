@@ -167,11 +167,25 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
 .scrub input{width:100%}
 .cam-prog{position:absolute;left:0;right:0;bottom:0;padding:10px 14px;background:rgba(0,0,0,.72);color:#fff;font-size:14px;display:none}
 .cam-prog .bar{background:rgba(255,255,255,.2);margin:6px 0 0}
+.reclist{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.recitem{appearance:none;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:0;overflow:hidden;text-align:left;cursor:pointer;font:inherit;color:var(--ink);display:flex;flex-direction:column}
+.recitem img{width:100%;aspect-ratio:3/4;object-fit:cover;background:#000;display:block}
+.recitem div{padding:6px 9px 8px;display:flex;flex-direction:column;gap:1px}
+.recitem b{font-size:13.5px}
+.recitem span{font-size:12px;color:var(--ink2)}
+.recitem .nt{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.recempty{padding:26px 10px;text-align:center;color:var(--ink2);font-size:14px;border:1.5px dashed var(--line);border-radius:12px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:99px;font-size:14px;font-weight:700;z-index:30;box-shadow:0 4px 16px rgba(0,0,0,.25);display:none;max-width:90vw;text-align:center}
+textarea.note-in{width:100%;min-height:64px;font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;resize:vertical}
+.exp{margin-top:10px}
+.exp .bar{margin:6px 0}
+.chk{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);margin-top:4px}
 .floatback{position:fixed;right:14px;bottom:14px;z-index:20;display:none;box-shadow:0 4px 16px rgba(0,0,0,.25)}
 </style>
 </head>
 <body>
 <button class="btn primary floatback" id="floatBack">← 遅延映像に戻る</button>
+<div class="toast" id="toast"></div>
 <div class="wrap">
   <header class="top">
     <div class="brand">
@@ -191,6 +205,7 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
   <div class="tabs" role="tablist">
     <button id="tabCam" class="on" role="tab">遅延カメラ</button>
     <button id="tabFile" role="tab">動画ファイル</button>
+    <button id="tabRec" role="tab">記録</button>
   </div>
 
   <!-- 遅延カメラ -->
@@ -203,6 +218,7 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
       <div class="cam-over">
         <button class="btn" id="camFull" style="display:none">全画面</button>
         <button class="btn" id="camPause" disabled>一時停止</button>
+        <button class="btn" id="camSave" disabled>記録</button>
         <button class="btn primary" id="camDiag" disabled>直前の射を診断</button>
       </div>
       <div class="cam-prog" id="camProg"><span id="camProgText">解析中…</span><div class="bar"><i id="camBar"></i></div></div>
@@ -231,6 +247,7 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
       <label class="f">骨格推定モデル
         <select id="camModel"><option value="full" selected>標準（高精度）</option><option value="lite">軽量（iPhone・古いiPad向け）</option></select>
       </label>
+      <label class="chk"><input type="checkbox" id="camAuto" checked> 診断した射を自動で記録に残す</label>
     </div>
     </details>
     <div class="err" id="camErr"></div>
@@ -241,9 +258,28 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
         <li>画面には設定した秒数だけ遅れた映像が流れ続ける。射のあと戻ってきた射手が、自分の射をそのまま見られる</li>
         <li>見たい射のあとに「直前の射を診断」を押すと、さかのぼった範囲から一番新しい離れを見つけて診断する（iPadで10〜30秒ほど）</li>
         <li>「一時停止」で映像を止め、下のつまみで巻き戻して見返せる。録画は裏で続いている</li>
-        <li>映像は端末のメモリにだけ置かれ、保存も送信もされない。画面は自動で消えないようにしている</li>
+        <li>「記録」を押すと直前の映像を、「直前の射を診断」をすると診断結果ごと「記録」タブに残る。あとから見返し・メモ・動画での保存ができる</li>
+        <li>映像はどこにも送信されない。記録は端末のブラウザの中にだけ保存される。画面は自動で消えないようにしている</li>
       </ul>
     </details>
+  </section>
+
+  <!-- 記録 -->
+  <section class="card" id="recCard" style="display:none">
+    <div class="ph-head" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px"><h2 style="margin:0">記録</h2><span class="small muted" id="recUsage"></span></div>
+    <div class="reclist" id="recList"></div>
+    <p class="small muted" style="margin:12px 0 0">記録はこの端末のブラウザの中だけに保存されます。ブラウザのデータを消すと記録も消えるので、残しておきたい射は「動画で保存」で写真アプリに保存してください。</p>
+  </section>
+
+  <section class="card" id="recView" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"><h2 style="margin:0" id="rvTitle">記録</h2><button class="btn sm ghost" id="rvBack">一覧に戻る</button></div>
+    <div class="stage" id="rvStage"><canvas id="rvC"></canvas></div>
+    <div class="ctrl"><button class="btn sm" id="rvPlay">▶ 再生</button><select id="rvSpeed" aria-label="再生速度"><option value="0.25">0.25倍</option><option value="0.5">0.5倍</option><option value="1" selected>1倍</option></select><span class="time" id="rvTime">0.0s</span></div>
+    <input type="range" id="rvSeek" min="0" max="1" step="0.001" value="0" style="width:100%;margin-top:8px" aria-label="再生位置">
+    <div class="mainrow"><button class="btn primary" id="rvDiag">この記録を診断</button></div>
+    <div class="progress" id="rvProg"><div class="bar"><i id="rvBar"></i></div><div class="small muted" id="rvProgText"></div></div>
+    <div class="err" id="rvErr"></div>
+    <div class="recbar" id="rvBarActions"></div>
   </section>
 
   <!-- 入力 -->
@@ -327,6 +363,7 @@ details.tips ul{margin:8px 0 0;padding-left:20px}
             <button class="btn sm" id="copy">結果をテキストでコピー</button>
             <button class="btn sm ghost" id="again">別の動画を解析</button>
           </div>
+          <div class="recbar" id="resBarActions"></div>
         </div>
       </div>
     </section>
@@ -512,7 +549,8 @@ $("#demo").onclick=()=>{ hideErr(); const d=makeDemo(); S.source="demo"; S.W=d.W
 $("#cancel").onclick=()=>{ S.cancel=true; };
 $("#again").onclick=()=>backToInput();
 function backToInput(){ pause(); $("#results").style.display="none"; $("#floatBack").style.display="none";
-  (S.mode==="cam"?$("#camCard"):$("#inputCard")).scrollIntoView({behavior:"smooth"}); }
+  if(S.mode==="rec"){ S.curRec=null; $("#recView").style.display="none"; $("#recCard").style.display=""; renderRecList(); }
+  (S.mode==="cam"?$("#camCard"):S.mode==="rec"?$("#recCard"):$("#inputCard")).scrollIntoView({behavior:"smooth"}); }
 
 function setBusy(b,txt){
   $("#progress").style.display=b?"block":"none";
@@ -960,7 +998,9 @@ async function finishAnalysis(raw){
   const P=detectPhases(F,S.fps);
   const style=$("#optStyle").value;
   const M=computeMetrics(F,P,{Sm,Tm,dir,style,fps:S.fps});
-  S.frames=F; S.res={P,M,hand,dir,Sm,Tm,style};
+  const graded=M.filter(m=>STATUS[m.st]&&STATUS[m.st].w!=null);
+  const score=graded.length?Math.round(graded.reduce((s,m)=>s+STATUS[m.st].w,0)/graded.length):null;
+  S.frames=F; S.res={P,M,hand,dir,Sm,Tm,style,score,raw};
   setBusy(false); setProg(0);
   await renderResults();
 }
@@ -1013,8 +1053,10 @@ async function renderResults(){
   // プレイヤー準備
   const F=S.frames; S.t=F[0].t;
   const v=$("#mv");
-  $("#again").textContent = S.mode==="cam" ? "遅延映像に戻る" : "別の動画を解析";
-  $("#floatBack").style.display = S.mode==="cam" ? "inline-flex" : "none";
+  $("#again").textContent = S.mode==="cam" ? "遅延映像に戻る" : S.mode==="rec" ? "記録の一覧に戻る" : "別の動画を解析";
+  $("#floatBack").textContent = S.mode==="rec" ? "← 記録の一覧に戻る" : "← 遅延映像に戻る";
+  $("#floatBack").style.display = (S.mode==="cam"||S.mode==="rec") ? "inline-flex" : "none";
+  renderResBar();
   if(S.source==="frames"){ v.style.display="none"; $("#tgVideo").parentElement.style.display=""; bmpCache.clear(); }
   else if(S.source==="demo"){ v.removeAttribute("src"); v.style.display="none"; $("#tgVideo").parentElement.style.display="none"; }
   else { v.style.display="block"; $("#tgVideo").parentElement.style.display=""; v.playbackRate=+$("#speed").value; }
@@ -1279,13 +1321,16 @@ const CAM={stream:null, v:null, cc:null, cctx:null, buf:[], pending:0, lastCap:0
 const nowS=()=>performance.now()/1000;
 
 function setMode(m){
-  S.mode=m;
-  $("#tabCam").classList.toggle("on",m==="cam"); $("#tabFile").classList.toggle("on",m==="file");
+  S.mode=m; S.curRec=null;
+  $("#tabCam").classList.toggle("on",m==="cam"); $("#tabFile").classList.toggle("on",m==="file"); $("#tabRec").classList.toggle("on",m==="rec");
   $("#camCard").style.display=m==="cam"?"":"none"; $("#inputCard").style.display=m==="file"?"":"none";
+  $("#recCard").style.display=m==="rec"?"":"none"; $("#recView").style.display="none"; rvStop();
   pause(); $("#results").style.display="none"; $("#floatBack").style.display="none";
+  if(m==="rec") renderRecList();
 }
 $("#tabCam").onclick=()=>setMode("cam");
 $("#tabFile").onclick=()=>{ setMode("file"); };
+$("#tabRec").onclick=()=>setMode("rec");
 $("#floatBack").onclick=()=>backToInput();
 
 function camErr(m){ const e=$("#camErr"); if(!m){ e.style.display="none"; return; } e.innerHTML=m; e.style.display="block"; }
@@ -1319,7 +1364,7 @@ async function camStart(){
   CAM.v.srcObject=CAM.stream; try{ await CAM.v.play(); }catch(_){}
   CAM.buf=[]; CAM.shownIdx=-1; CAM.paused=false; CAM.w=0;
   $("#camStart").style.display="none"; $("#camStop").style.display="inline-flex";
-  $("#camDiag").disabled=false; $("#camPause").disabled=false; $("#camPause").textContent="一時停止";
+  $("#camDiag").disabled=false; $("#camPause").disabled=false; $("#camSave").disabled=false; $("#camPause").textContent="一時停止";
   $("#camBadge").style.display=""; $("#camStage").classList.remove("idle");
   const fsOK=$("#camStage").requestFullscreen||$("#camStage").webkitRequestFullscreen; $("#camFull").style.display=fsOK?"":"none";
   keepAwake();
@@ -1330,7 +1375,7 @@ async function camStart(){
 function camStopStream(){ if(CAM.stream){ CAM.stream.getTracks().forEach(t=>t.stop()); CAM.stream=null; } }
 function camStop(){
   camStopStream(); cancelAnimationFrame(CAM.raf); CAM.buf=[]; CAM.lastBmp=null;
-  $("#camStart").style.display=""; $("#camStop").style.display="none"; $("#camStage").style.height=""; $("#camDiag").disabled=true; $("#camPause").disabled=true;
+  $("#camStart").style.display=""; $("#camStop").style.display="none"; $("#camStage").style.height=""; $("#camDiag").disabled=true; $("#camPause").disabled=true; $("#camSave").disabled=true;
   $("#camBadge").style.display="none"; $("#scrub").style.display="none"; $("#camStat").textContent=""; $("#camStage").classList.add("idle");
   const c=$("#dc"); c.getContext("2d").clearRect(0,0,c.width,c.height);
   camMsg("遅延カメラ","「カメラを開始」を押してください");
@@ -1422,43 +1467,242 @@ function lastRelease(F,fps){
 function camProg(p,txt){ const el=$("#camProg"); if(p==null){ el.style.display="none"; return; } el.style.display="block"; $("#camBar").style.width=(p*100).toFixed(1)+"%"; if(txt) $("#camProgText").textContent=txt; }
 
 $("#camDiag").onclick=()=>withBusy(camDiagnose);
+/* frames:[{t,blob,(w,h)}] から最新の1射を見つけて診断する。成功すると {frames:切り出したコマ, raw, aF} を返す */
+async function diagnoseFrames(frames,W,H,label,prog){
+  const aF=10, t0=frames[0].t, tEnd=frames[frames.length-1].t;
+  prog(0,"骨格推定モデルを準備中…");
+  await loadModel($("#camModel").value);
+  const ts=frames.map(f=>f.t), raw=[]; let last=-1; const st=performance.now();
+  const steps=Math.floor((tEnd-t0)*aF)+1;
+  for(let k=0;k<steps;k++){
+    if(document.hidden){ prog(k/steps,"一時停止中：この画面に戻ると、続きから自動で再開します"); await waitVisible(); busyLock(); }
+    const g=visGen;
+    const i=nearest(ts,t0+k/aF); if(i===last) continue;
+    const f=frames[i]; let lm=null;
+    try{ const bm=await createImageBitmap(f.blob); mpTs+=1000/aF+1;
+      lm=await detectPose(bm,Math.round(mpTs)); bm.close&&bm.close(); }catch(e){ console.warn(e); }
+    if(g!==visGen){ k--; continue; }
+    last=i; raw.push({t:f.t-t0,lm});
+    if(k%4===0){ const el=(performance.now()-st)/1000, eta=el/(k+1)*(steps-k-1); busyTitle((k+1)/steps); prog((k+1)/steps,`${label}を解析中…（残り約${Math.ceil(eta)}秒）`); await new Promise(r=>setTimeout(r,0)); }
+  }
+  if(raw.filter(r=>r.lm).length<raw.length*0.3) throw new Error("射手を検出できませんでした。全身が映る位置にカメラを置いてください。");
+  prog(1,"離れを探しています…");
+  const Fp=preprocess(raw,W,H,aF); baseFeatures(Fp,aF);
+  const r=lastRelease(Fp,aF);
+  if(r<0) throw new Error(`${label}の中に離れが見つかりませんでした。射のあとに押すか、さかのぼる範囲を広げてください。`);
+  const tr=Fp[r].t, a=tr-25, b=tr+5;
+  const crop=raw.filter(x=>x.t>=a&&x.t<=b);
+  const disp=frames.filter(f=>f.t-t0>=a&&f.t-t0<=b).map(f=>({t:f.t-t0,blob:f.blob}));
+  S.disp=disp; S.source="frames"; S.W=W; S.H=H; S.fps=aF;
+  $("#optHand").value=$("#camHand").value;
+  await finishAnalysis(crop);
+  return {frames:disp,raw:crop,aF};
+}
 async function camDiagnose(){
   if(CAM.busy||!CAM.buf.length) return;
   CAM.busy=true; $("#camDiag").disabled=true; camErr(null);
   try{
-    const now=nowS(), win=+$("#camWin").value, aF=10;
+    const now=nowS(), win=+$("#camWin").value;
     const frames=CAM.buf.filter(f=>f.t>=now-win);
     if(frames.length<CAP_FPS*6) throw new Error("録画がまだ短すぎます（6秒以上必要）。");
-    const W=frames[0].w, H=frames[0].h, t0=frames[0].t, tEnd=frames[frames.length-1].t;
-    camProg(0,"骨格推定モデルを準備中…");
-    await loadModel($("#camModel").value);
-    const ts=frames.map(f=>f.t), raw=[]; let last=-1; const st=performance.now();
-    const steps=Math.floor((tEnd-t0)*aF)+1;
-    for(let k=0;k<steps;k++){
-      if(document.hidden){ camProg(k/steps,"一時停止中：この画面に戻ると、続きから自動で再開します"); await waitVisible(); busyLock(); }
-      const g=visGen;
-      const i=nearest(ts,t0+k/aF); if(i===last) continue;
-      const f=frames[i]; let lm=null;
-      try{ const bm=await createImageBitmap(f.blob); mpTs+=1000/aF+1;
-        lm=await detectPose(bm,Math.round(mpTs)); bm.close&&bm.close(); }catch(e){ console.warn(e); }
-      if(g!==visGen){ k--; continue; }
-      last=i; raw.push({t:f.t-t0,lm});
-      if(k%4===0){ const el=(performance.now()-st)/1000, eta=el/(k+1)*(steps-k-1); busyTitle((k+1)/steps); camProg((k+1)/steps,`直前${Math.round(tEnd-t0)}秒の射を解析中…（残り約${Math.ceil(eta)}秒）`); await new Promise(r=>setTimeout(r,0)); }
+    S.curRec=null;
+    const out=await diagnoseFrames(frames,frames[0].w,frames[0].h,`直前${Math.round(frames[frames.length-1].t-frames[0].t)}秒`,camProg);
+    if($("#camAuto").checked){
+      try{ S.curRec=await saveRecord({frames:out.frames,w:S.W,h:S.H,analysis:{raw:out.raw,aF:out.aF,hand:S.res.hand},score:S.res.score,stage:S.res.P.stage});
+        renderResBar(); toast("この射を記録に保存しました"); }catch(e){ console.warn(e); toast("記録の保存に失敗しました（空き容量を確認してください）"); }
     }
-    if(raw.filter(r=>r.lm).length<raw.length*0.3) throw new Error("射手を検出できませんでした。全身が映る位置にカメラを置いてください。");
-    camProg(1,"離れを探しています…");
-    const Fp=preprocess(raw,W,H,aF); baseFeatures(Fp,aF);
-    const r=lastRelease(Fp,aF);
-    if(r<0) throw new Error(`直前${win}秒の中に離れが見つかりませんでした。射のあとに押すか、さかのぼる範囲を広げてください。`);
-    const tr=Fp[r].t, a=tr-25, b=tr+5;
-    const crop=raw.filter(x=>x.t>=a&&x.t<=b);
-    S.disp=frames.filter(f=>f.t-t0>=a&&f.t-t0<=b).map(f=>({t:f.t-t0,blob:f.blob}));
-    S.source="frames"; S.W=W; S.H=H; S.fps=aF;
-    $("#optHand").value=$("#camHand").value;
-    await finishAnalysis(crop);
   }catch(e){ console.error(e); camErr(esc(e.message||e)); }
   finally{ CAM.busy=false; $("#camDiag").disabled=!CAM.stream; camProg(null); }
 }
+$("#camSave").onclick=async()=>{
+  if(!CAM.buf.length) return;
+  const now=nowS(), win=+$("#camWin").value;
+  const fr=CAM.buf.filter(f=>f.t>=now-win); if(fr.length<CAP_FPS*2){ toast("まだ録画が短すぎます"); return; }
+  const t0=fr[0].t; $("#camSave").disabled=true;
+  try{ await saveRecord({frames:fr.map(f=>({t:f.t-t0,blob:f.blob})),w:fr[0].w,h:fr[0].h,analysis:null,score:null,stage:null});
+    toast(`直前${Math.round(fr[fr.length-1].t-t0)}秒を記録しました`); }
+  catch(e){ console.warn(e); toast("記録の保存に失敗しました（空き容量を確認してください）"); }
+  finally{ $("#camSave").disabled=!CAM.stream; }
+};
+
+/* ==================== 記録（端末のブラウザ内 IndexedDB に保存） ==================== */
+const REC={db:null};
+function recDB(){
+  if(REC.db) return Promise.resolve(REC.db);
+  return new Promise((res,rej)=>{ let rq; try{ rq=indexedDB.open("shakei-records",1); }catch(e){ rej(e); return; }
+    rq.onupgradeneeded=()=>{ const db=rq.result; if(!db.objectStoreNames.contains("meta")) db.createObjectStore("meta",{keyPath:"id"}); if(!db.objectStoreNames.contains("data")) db.createObjectStore("data",{keyPath:"id"}); };
+    rq.onsuccess=()=>{ REC.db=rq.result; res(REC.db); }; rq.onerror=()=>rej(rq.error); });
+}
+async function idb(store,mode,op){ const db=await recDB(); return new Promise((res,rej)=>{ const t=db.transaction(store,mode); const r=op(t.objectStore(store)); t.oncomplete=()=>res(r?r.result:undefined); t.onerror=t.onabort=()=>rej(t.error||new Error("IDB error")); }); }
+async function makeThumb(blob){
+  const bm=await createImageBitmap(blob); const w=240, h=Math.round(bm.height*w/bm.width);
+  const c=document.createElement("canvas"); c.width=w; c.height=h; c.getContext("2d").drawImage(bm,0,0,w,h); bm.close&&bm.close();
+  return new Promise(r=>c.toBlob(b=>r(b),"image/jpeg",0.7));
+}
+async function saveRecord(rec){
+  const id=Date.now();
+  try{ navigator.storage&&navigator.storage.persist&&navigator.storage.persist(); }catch(_){}
+  const fr=[]; for(const f of rec.frames) fr.push({t:f.t,buf:await f.blob.arrayBuffer()}); // Blobのままより確実に保存できる
+  let ti=Math.floor(fr.length*0.6);
+  if(rec.analysis&&S.res&&S.res.P.ph&&S.res.P.ph.kai){ const tk=S.frames[S.res.P.ph.kai.e].t; ti=nearest(rec.frames.map(f=>f.t),tk); }
+  const thumb=await makeThumb(rec.frames[ti].blob);
+  const meta={id,created:id,dur:rec.frames[rec.frames.length-1].t-rec.frames[0].t,score:rec.score,stage:rec.stage,note:"",thumb:await thumb.arrayBuffer(),hasAnalysis:!!rec.analysis};
+  await idb("data","readwrite",st=>st.put({id,frames:fr,w:rec.w,h:rec.h,analysis:rec.analysis}));
+  await idb("meta","readwrite",st=>st.put(meta));
+  return id;
+}
+async function loadRecord(id){
+  const d=await idb("data","readonly",st=>st.get(id)); if(!d) return null;
+  d.frames=d.frames.map(f=>({t:f.t,blob:new Blob([f.buf],{type:"image/jpeg"})})); return d;
+}
+async function patchRecord(id,metaPatch,dataPatch){
+  if(dataPatch){ const d=await idb("data","readonly",st=>st.get(id)); Object.assign(d,dataPatch); await idb("data","readwrite",st=>st.put(d)); }
+  if(metaPatch){ const m=await idb("meta","readonly",st=>st.get(id)); Object.assign(m,metaPatch); await idb("meta","readwrite",st=>st.put(m)); }
+}
+async function deleteRecord(id){ await idb("data","readwrite",st=>st.delete(id)); await idb("meta","readwrite",st=>st.delete(id)); }
+function fmtDate(ms){ const d=new Date(ms); return `${d.getMonth()+1}月${d.getDate()}日 ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`; }
+let recThumbURLs=[];
+async function renderRecList(){
+  const box=$("#recList");
+  let metas=[];
+  try{ metas=await idb("meta","readonly",st=>st.getAll()); }catch(e){ box.innerHTML=`<div class="recempty">このブラウザでは記録を保存できません（プライベートブラウズでは使えません）</div>`; return; }
+  metas.sort((a,b)=>b.created-a.created);
+  recThumbURLs.forEach(u=>URL.revokeObjectURL(u)); recThumbURLs=[];
+  if(!metas.length){ box.innerHTML=`<div class="recempty" style="grid-column:1/-1">まだ記録はありません<br><span class="small">遅延カメラの「記録」か「直前の射を診断」で残せます</span></div>`; }
+  else box.innerHTML=metas.map(m=>{ const u=URL.createObjectURL(new Blob([m.thumb],{type:"image/jpeg"})); recThumbURLs.push(u);
+    const sc=m.hasAnalysis?(m.score!=null?`スコア ${m.score}`:"診断済み"):"未診断";
+    return `<button class="recitem" data-id="${m.id}"><img src="${u}" alt=""><div><b>${fmtDate(m.created)}</b><span>${Math.round(m.dur)}秒・${sc}</span>${m.note?`<span class="nt">${esc(m.note)}</span>`:""}</div></button>`; }).join("");
+  box.querySelectorAll(".recitem").forEach(b=>b.onclick=()=>openRecord(+b.dataset.id));
+  try{ if(navigator.storage&&navigator.storage.estimate){ const e=await navigator.storage.estimate(); const mb=e.usage/1048576; $("#recUsage").textContent=`${metas.length}件・${mb<1?"1MB未満":mb.toFixed(0)+"MB"}使用`; } else $("#recUsage").textContent=`${metas.length}件`; }catch(_){}
+}
+
+/* 記録を開く：診断済みなら結果画面、未診断なら簡易プレイヤー */
+const RV={frames:null,w:0,h:0,t:0,playing:false,raf:0,last:0,id:null,meta:null,decoding:false};
+async function openRecord(id){
+  const meta=await idb("meta","readonly",st=>st.get(id)); const d=await loadRecord(id);
+  if(!d){ toast("記録が見つかりません"); renderRecList(); return; }
+  S.curRec=id; S.curMeta=meta;
+  if(d.analysis){
+    $("#recCard").style.display="none";
+    S.disp=d.frames; S.source="frames"; S.W=d.w; S.H=d.h; S.fps=d.analysis.aF;
+    $("#optHand").value=d.analysis.hand||"auto";
+    await finishAnalysis(d.analysis.raw);
+    return;
+  }
+  RV.frames=d.frames; RV.w=d.w; RV.h=d.h; RV.t=d.frames[0].t; RV.id=id; RV.meta=meta;
+  $("#recCard").style.display="none"; $("#recView").style.display=""; $("#rvErr").style.display="none";
+  $("#rvTitle").textContent=fmtDate(meta.created);
+  const st=$("#rvStage"), ar=d.w/d.h, w=Math.min(st.parentElement.clientWidth, Math.min(window.innerHeight*0.62,720)*ar);
+  st.style.width=w+"px"; st.style.height=(w/ar)+"px";
+  const c=$("#rvC"), dpr=Math.min(2,devicePixelRatio||1); c.width=Math.round(w*dpr); c.height=Math.round(w/ar*dpr);
+  renderActions($("#rvBarActions"),{frames:d.frames,w:d.w,h:d.h,overlay:false});
+  rvDraw(); $("#recView").scrollIntoView({behavior:"smooth"});
+}
+function rvIdx(t){ return nearest(RV.frames.map(f=>f.t),t); }
+function rvDraw(){
+  if(!RV.frames||RV.decoding) return; const i=rvIdx(RV.t); RV.decoding=true;
+  createImageBitmap(RV.frames[i].blob).then(bm=>{ RV.decoding=false; const c=$("#rvC"); c.getContext("2d").drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close(); }).catch(()=>{RV.decoding=false;});
+  const t0=RV.frames[0].t, t1=RV.frames[RV.frames.length-1].t;
+  $("#rvTime").textContent=(RV.t-t0).toFixed(1)+"s / "+(t1-t0).toFixed(1)+"s"; $("#rvSeek").value=String((RV.t-t0)/((t1-t0)||1));
+}
+function rvStop(){ RV.playing=false; cancelAnimationFrame(RV.raf); const b=$("#rvPlay"); if(b) b.textContent="▶ 再生"; }
+$("#rvPlay").onclick=()=>{
+  if(RV.playing){ rvStop(); return; }
+  const t1=RV.frames[RV.frames.length-1].t; if(RV.t>=t1-0.01) RV.t=RV.frames[0].t;
+  RV.playing=true; $("#rvPlay").textContent="❚❚ 停止"; RV.last=performance.now();
+  const loop=now=>{ if(!RV.playing) return; RV.t+=(now-RV.last)/1000*(+$("#rvSpeed").value); RV.last=now;
+    if(RV.t>=t1){ RV.t=t1; rvDraw(); rvStop(); return; } rvDraw(); RV.raf=requestAnimationFrame(loop); };
+  RV.raf=requestAnimationFrame(loop);
+};
+$("#rvSeek").oninput=e=>{ rvStop(); const t0=RV.frames[0].t, t1=RV.frames[RV.frames.length-1].t; RV.t=t0+(t1-t0)*(+e.target.value); rvDraw(); };
+$("#rvBack").onclick=()=>{ rvStop(); $("#recView").style.display="none"; $("#recCard").style.display=""; S.curRec=null; renderRecList(); };
+$("#rvDiag").onclick=()=>withBusy(async()=>{
+  if(!RV.frames) return; rvStop(); $("#rvDiag").disabled=true; $("#rvErr").style.display="none";
+  const prog=(p,txt)=>{ $("#rvProg").style.display="block"; $("#rvBar").style.width=(p*100).toFixed(1)+"%"; if(txt) $("#rvProgText").textContent=txt; };
+  try{
+    S.curRec=RV.id;
+    const out=await diagnoseFrames(RV.frames,RV.w,RV.h,"記録",prog);
+    await patchRecord(RV.id,{hasAnalysis:true,score:S.res.score,stage:S.res.P.stage},{analysis:{raw:out.raw,aF:out.aF,hand:S.res.hand}});
+    $("#recView").style.display="none"; renderResBar(); toast("診断結果を記録に保存しました");
+  }catch(e){ console.error(e); const el=$("#rvErr"); el.textContent=e.message||String(e); el.style.display="block"; }
+  finally{ $("#rvDiag").disabled=false; $("#rvProg").style.display="none"; }
+});
+
+/* 記録・書き出しの操作欄（結果画面と簡易プレイヤーで共用） */
+function renderResBar(){
+  const host=$("#resBarActions"); if(!host) return;
+  if(S.source!=="frames"||!S.disp||!S.disp.length){ host.innerHTML=""; return; }
+  renderActions(host,{frames:S.disp,w:S.W,h:S.H,overlay:true});
+}
+function renderActions(host,o){
+  const id=S.curRec;
+  host.innerHTML=`<div class="row" style="margin-top:12px">
+      ${o.overlay?`<select class="expOv" aria-label="書き出す内容"><option value="1">骨格線つき</option><option value="0">映像のみ</option></select>`:""}
+      <button class="btn sm expBtn">動画で保存</button>
+      ${id?`<button class="btn sm ghost delBtn">記録を削除</button>`:`<button class="btn sm ghost saveBtn">記録に残す</button>`}
+    </div>
+    <div class="exp" style="display:none"><div class="bar"><i></i></div><div class="small muted expTxt"></div><div class="expOut"></div></div>
+    ${id?`<label class="f" style="margin-top:10px">メモ<textarea class="note-in" placeholder="気付いたこと・指導されたことなど">${esc((S.curMeta&&S.curMeta.id===id&&S.curMeta.note)||"")}</textarea></label>`:""}`;
+  const q=sel=>host.querySelector(sel);
+  q(".expBtn").onclick=()=>withBusy(async()=>{
+    const ov=o.overlay&&q(".expOv")&&q(".expOv").value==="1";
+    const box=q(".exp"), bar=box.querySelector(".bar>i"), txt=q(".expTxt"), out=q(".expOut");
+    box.style.display="block"; out.innerHTML=""; q(".expBtn").disabled=true;
+    try{
+      const file=await exportFrames(o.frames,o.w,o.h,ov,(p,m)=>{ bar.style.width=(p*100).toFixed(1)+"%"; txt.textContent=m; });
+      txt.textContent=`書き出しました（${(file.size/1048576).toFixed(1)}MB）。下のボタンで写真アプリやファイルに保存できます。`;
+      const b=document.createElement("button"); b.className="btn primary"; b.textContent="写真・ファイルに保存"; b.style.marginTop="6px";
+      b.onclick=()=>shareFile(file); out.appendChild(b);
+    }catch(e){ console.error(e); txt.textContent="書き出しに失敗しました："+(e.message||e); }
+    finally{ q(".expBtn").disabled=false; }
+  });
+  if(q(".saveBtn")) q(".saveBtn").onclick=async()=>{
+    q(".saveBtn").disabled=true;
+    try{ S.curRec=await saveRecord({frames:o.frames,w:o.w,h:o.h,analysis:S.res?{raw:S.res.raw,aF:S.fps,hand:S.res.hand}:null,score:S.res?S.res.score:null,stage:S.res?S.res.P.stage:null});
+      S.curMeta=null; toast("記録に保存しました"); renderActions(host,o); }
+    catch(e){ console.warn(e); toast("記録の保存に失敗しました"); q(".saveBtn").disabled=false; }
+  };
+  if(q(".delBtn")){ let armed=false; q(".delBtn").onclick=async()=>{
+    if(!armed){ armed=true; q(".delBtn").textContent="もう一度押すと削除"; setTimeout(()=>{ armed=false; const b=q(".delBtn"); if(b) b.textContent="記録を削除"; },3000); return; }
+    await deleteRecord(id); toast("記録を削除しました"); S.curRec=null;
+    if(S.mode==="rec"){ rvStop(); $("#recView").style.display="none"; backToInput(); } else renderResBar();
+  }; }
+  const ta=q(".note-in"); if(ta){ let tmr=0; ta.oninput=()=>{ clearTimeout(tmr); tmr=setTimeout(()=>{ patchRecord(id,{note:ta.value.slice(0,500)}).catch(()=>{}); if(S.curMeta) S.curMeta.note=ta.value; },500); }; }
+}
+async function shareFile(file){
+  try{ if(navigator.canShare&&navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:"射形診断"}); return; } }
+  catch(e){ if(e&&e.name==="AbortError") return; }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(file); a.download=file.name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+}
+/* コマ（JPEG）を実時間で描き直して MediaRecorder で動画にする */
+async function exportFrames(frames,w,h,overlay,prog){
+  const c=document.createElement("canvas"); c.width=w-(w%2); c.height=h-(h%2);
+  if(!c.captureStream||!window.MediaRecorder) throw new Error("このブラウザは動画の書き出しに対応していません");
+  const ctx=c.getContext("2d");
+  const mime=["video/mp4;codecs=avc1","video/mp4","video/webm;codecs=vp9","video/webm"].find(m=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(m))||"";
+  const drawAt=async i=>{ const f=frames[i]; const bm=await createImageBitmap(f.blob); ctx.drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close();
+    if(overlay&&S.frames&&S.frames.length){ const j=frameAt(f.t); if(Math.abs(S.frames[j].t-f.t)<0.25) drawFrame(ctx,S.frames[j],S.W,S.H,c.width,c.height,{skel:true,guide:true,phase:phaseOf(j)}); } };
+  await drawAt(0);
+  const stream=c.captureStream(30);
+  const rec=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:5e6}:{});
+  const chunks=[]; rec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+  const stopped=new Promise(r=>rec.onstop=r);
+  rec.start(500);
+  const t0=frames[0].t, dur=frames[frames.length-1].t-t0; let base=performance.now();
+  for(let i=0;i<frames.length;i++){
+    if(document.hidden){ try{rec.pause();}catch(_){} const hid=performance.now(); prog(i/frames.length,"一時停止中：この画面に戻ると続きから書き出します"); await waitVisible(); base+=performance.now()-hid; try{rec.resume();}catch(_){} }
+    const wait=base+(frames[i].t-t0)*1000-performance.now(); if(wait>0) await new Promise(r=>setTimeout(r,wait));
+    await drawAt(i);
+    if(i%5===0) prog(i/frames.length,`動画を書き出し中…（${dur.toFixed(0)}秒の映像、残り約${Math.ceil(dur*(1-i/frames.length))}秒）`);
+  }
+  await new Promise(r=>setTimeout(r,400)); rec.stop(); await stopped;
+  stream.getTracks().forEach(t=>t.stop());
+  const type=((rec.mimeType||mime||"video/webm").split(";")[0])||"video/webm";
+  const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}_${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}`;
+  return new File(chunks,`shakei_${stamp}.${type.includes("mp4")?"mp4":"webm"}`,{type});
+}
+function toast(m){ const t=$("#toast"); t.textContent=m; t.style.display="block"; clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.display="none",2600); }
 
 /* 診断結果の背景に使うコマ（JPEG）の読み出し */
 const bmpCache=new Map(); let bmpPend=new Set(), lastDispBmp=null;
